@@ -41,12 +41,55 @@ interface CostesCalculatorProps {
   initialData?: unknown;
   projectId?: string;
   projectName?: string;
+  mlData?: unknown;
 }
 
 const parseInit = (data: unknown): CostesData =>
   (data && typeof data === 'object' ? data : {}) as CostesData;
 
-export function CostesCalculator({ initialData, projectId, projectName: externalProjectName }: CostesCalculatorProps) {
+interface MLActivity {
+  description: string;
+  cost: string;
+}
+
+interface MLNode {
+  description?: string;
+  cost?: string | number;
+  results?: MLNode[];
+  activities?: MLNode[];
+}
+
+interface MLRoot {
+  objectives?: MLNode[];
+}
+
+function extractMLActivities(data: unknown): MLActivity[] {
+  if (!data || typeof data !== 'object') return [];
+  const ml = data as MLRoot;
+  const activities: MLActivity[] = [];
+  
+  if (Array.isArray(ml.objectives)) {
+    ml.objectives.forEach(obj => {
+      if (Array.isArray(obj.results)) {
+        obj.results.forEach(res => {
+          if (Array.isArray(res.activities)) {
+            res.activities.forEach(act => {
+              if (act && typeof act.description === 'string' && act.description.trim() !== '') {
+                activities.push({
+                  description: act.description,
+                  cost: typeof act.cost === 'string' ? act.cost : typeof act.cost === 'number' ? String(act.cost) : ''
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+  }
+  return activities;
+}
+
+export function CostesCalculator({ initialData, projectId, projectName: externalProjectName, mlData }: CostesCalculatorProps) {
   const uid = useId();
   
   const init = parseInit(initialData);
@@ -57,11 +100,56 @@ export function CostesCalculator({ initialData, projectId, projectName: external
 
   const [durationMonths, setDurationMonths] = useState<number>(init.durationMonths || 12);
   const [indirectPct, setIndirectPct] = useState<number>(init.indirectPct !== undefined ? init.indirectPct : 10);
-  const [partidas, setPartidas] = useState<PartidaEntry[]>(init.partidas || [
-    { id: '1', category: 'personal', description: 'Coordinador/a de proyecto (50% jornada)', monthlyAmount: 1200, months: 12 },
-    { id: '2', category: 'material', description: 'Material de oficina', monthlyAmount: 150, months: 1 },
-  ]);
+  
+  const mlActivities = React.useMemo(() => extractMLActivities(mlData), [mlData]);
+  
+  const [partidas, setPartidas] = useState<PartidaEntry[]>(() => {
+    if (init.partidas && init.partidas.length > 0) return init.partidas;
+    
+    // Si no hay datos guardados pero hay actividades en ML, usarlas
+    if (mlActivities.length > 0) {
+      return mlActivities.map((act, idx) => ({
+        id: Date.now().toString() + idx,
+        category: 'actividades',
+        description: act.description,
+        monthlyAmount: parseFloat(act.cost) || 0,
+        months: 1
+      }));
+    }
+    
+    // Por defecto
+    return [
+      { id: '1', category: 'personal', description: 'Coordinador/a de proyecto (50% jornada)', monthlyAmount: 1200, months: 12 },
+      { id: '2', category: 'material', description: 'Material de oficina', monthlyAmount: 150, months: 1 },
+    ];
+  });
   const [isSaving, setIsSaving] = useState(false);
+
+  const handleSyncML = () => {
+    let addedCount = 0;
+    const newPartidas = [...partidas];
+    
+    mlActivities.forEach((mlAct, idx) => {
+      const exists = newPartidas.some(p => p.description.toLowerCase().trim() === mlAct.description.toLowerCase().trim());
+      if (!exists && mlAct.description.trim()) {
+        newPartidas.push({
+          id: Date.now().toString() + 'sync' + idx,
+          category: 'actividades',
+          description: mlAct.description,
+          monthlyAmount: parseFloat(mlAct.cost) || 0,
+          months: 1
+        });
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      setPartidas(newPartidas);
+      showToast(`Se han sincronizado ${addedCount} actividades del Marco Lógico`, 'success');
+    } else {
+      showToast('No hay actividades nuevas en el Marco Lógico', 'info');
+    }
+  };
 
   const addPartida = () => {
     setPartidas(prev => [...prev, {
@@ -199,10 +287,21 @@ export function CostesCalculator({ initialData, projectId, projectName: external
           </button>
         </div>
       ))}
-      <button className={styles.addBtn} onClick={addPartida}>
-        <Plus size={16} />
-        Añadir partida
-      </button>
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+        <button className={styles.addBtn} onClick={addPartida}>
+          <Plus size={16} />
+          Añadir partida
+        </button>
+        {mlActivities.length > 0 && (
+          <button 
+            className={styles.addBtn} 
+            onClick={handleSyncML}
+            style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+          >
+            Sincronizar Actividades (Marco Lógico)
+          </button>
+        )}
+      </div>
 
       <div className={styles.sectionHeader}>Costes indirectos</div>
       <div className={styles.sliderGroup}>
