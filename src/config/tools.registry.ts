@@ -50,9 +50,9 @@ export const TOOLS_REGISTRY: ToolRegistryEntry[] = [
     description: 'Genera automáticamente la memoria narrativa de tu proyecto social.',
     iconName: 'FileText',
     category: 'generadores',
-    status: 'coming-soon',
+    status: 'available',
     publicHref: '/herramientas/memoria-proyecto',
-    dashboardEnabled: false,
+    dashboardEnabled: true,
   },
   {
     slug: 'indicadores-impacto',
