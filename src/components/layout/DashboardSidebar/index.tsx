@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, LogOut, UserCircle, FolderKanban } from 'lucide-react';
+import { LayoutDashboard, LogOut, UserCircle, FolderKanban, ShieldCheck } from 'lucide-react';
 import { signOutAction } from '@/app/(dashboard)/actions';
 import styles from './DashboardSidebar.module.css';
 
@@ -17,7 +17,8 @@ export function DashboardSidebar({ userEmail, recentProjects }: DashboardSidebar
 
   const navItems = [
     { name: 'Mis Proyectos', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Mi Perfil', href: '/dashboard/perfil', icon: UserCircle },
+    { name: 'Mi Entidad / Perfil', href: '/dashboard/perfil', icon: UserCircle },
+    { name: 'Panel Comercial', href: '/dashboard/admin', icon: ShieldCheck },
   ];
 
   return (
