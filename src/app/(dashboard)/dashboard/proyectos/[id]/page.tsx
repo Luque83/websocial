@@ -4,8 +4,18 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, Target } from 'lucide-react';
+import { ArrowLeft, Target, Calculator, Users, FileText, BarChart2, Calendar } from 'lucide-react';
+import { getDashboardTools } from '@/config/tools.registry';
 import styles from './page.module.css';
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  Target,
+  Calculator,
+  Users,
+  FileText,
+  BarChart2,
+  Calendar,
+};
 
 export default async function ProjectPage({
   params,
@@ -17,7 +27,7 @@ export default async function ProjectPage({
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/login');
+    redirect('/login');
   }
 
   const { data: project, error } = await supabase
@@ -30,6 +40,17 @@ export default async function ProjectPage({
   if (error || !project) {
     redirect('/dashboard');
   }
+
+  const { data: projectTools } = await supabase
+    .from('project_tools')
+    .select('tool_slug, updated_at')
+    .eq('project_id', id);
+
+  const toolsDataMap = new Map(
+    (projectTools || []).map((pt: { tool_slug: string; updated_at: string }) => [pt.tool_slug, pt.updated_at])
+  );
+
+  const dashboardTools = getDashboardTools();
 
   return (
     <div className={styles.page}>
@@ -53,17 +74,32 @@ export default async function ProjectPage({
       <section className={styles.toolsSection}>
         <h2 className={styles.sectionTitle}>Herramientas del Proyecto</h2>
         <div className={styles.toolsGrid}>
-          <Link href={`/herramientas/marco-logico?projectId=${id}`} className={styles.toolLink}>
-            <Card className={styles.toolCard} padding="lg">
-              <div className={styles.toolIconWrapper}>
-                <Target size={32} />
-              </div>
-              <h3 className={styles.toolTitle}>Marco Lógico</h3>
-              <p className={styles.toolDescription}>
-                Define la matriz de marco lógico, objetivos, indicadores, medios de verificación y supuestos.
-              </p>
-            </Card>
-          </Link>
+          {dashboardTools.map((tool) => {
+            const IconComponent = ICON_MAP[tool.iconName] || Target;
+            const updatedAt = toolsDataMap.get(tool.slug);
+            const statusText = updatedAt
+              ? `Última edición: ${new Date(updatedAt).toLocaleDateString()}`
+              : 'Sin datos aún';
+            
+            return (
+              <Link key={tool.slug} href={`${tool.publicHref}?projectId=${id}`} className={styles.toolLink}>
+                <Card className={styles.toolCard} padding="lg">
+                  <div className={styles.toolIconWrapper}>
+                    <IconComponent size={32} />
+                  </div>
+                  <h3 className={styles.toolTitle}>{tool.name}</h3>
+                  <p className={styles.toolDescription}>
+                    {tool.description}
+                  </p>
+                  <div className={styles.toolStatus}>
+                    <span className={updatedAt ? styles.statusActive : styles.statusEmpty}>
+                      {statusText}
+                    </span>
+                  </div>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       </section>
     </div>

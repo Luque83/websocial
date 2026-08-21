@@ -1,13 +1,26 @@
 import type { Metadata } from 'next';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { ProrrateoCalculator } from './ProrrateoCalculator';
+import { getToolData } from '@/app/actions/tools';
 
 export const metadata: Metadata = {
   title: 'Calculadora de prorrateo de nóminas',
   description: 'Calcula el porcentaje de nómina imputable a cada proyecto social. Ideal para la justificación de costes de personal en subvenciones.',
 };
 
-export default function ProrrateoNominasPage() {
+export default async function ProrrateoNominasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ projectId?: string }>;
+}) {
+  const sp = await searchParams;
+  const projectId = sp?.projectId as string | undefined;
+  let initialData = undefined;
+
+  if (projectId) {
+    initialData = await getToolData(projectId, 'prorrateo-nominas');
+  }
+
   return (
     <ToolLayout
       title="Calculadora de prorrateo de nóminas"
@@ -21,7 +34,7 @@ export default function ProrrateoNominasPage() {
         'Copia o imprime la tabla resultante para tu justificación.',
       ]}
     >
-      <ProrrateoCalculator />
+      <ProrrateoCalculator initialData={initialData} projectId={projectId} />
     </ToolLayout>
   );
 }

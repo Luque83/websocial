@@ -3,6 +3,7 @@
 import React, { useState, useId } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
+import { saveToolData } from '@/app/actions/tools';
 import styles from './prorrateo.module.css';
 
 interface ProjectEntry {
@@ -17,13 +18,30 @@ const formatCurrency = (amount: number) =>
 const formatPct = (pct: number) =>
   `${pct.toFixed(2).replace('.', ',')}%`;
 
-export function ProrrateoCalculator() {
+interface ProrrateoData {
+  salary?: string;
+  projects?: ProjectEntry[];
+}
+
+interface ProrrateoCalculatorProps {
+  initialData?: unknown;
+  projectId?: string;
+}
+
+const parseInit = (data: unknown): ProrrateoData =>
+  (data && typeof data === 'object' ? data : {}) as ProrrateoData;
+
+export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalculatorProps) {
   const uid = useId();
-  const [salary, setSalary] = useState<string>('');
-  const [projects, setProjects] = useState<ProjectEntry[]>([
+  
+  const init = parseInit(initialData);
+
+  const [salary, setSalary] = useState<string>(init.salary || '');
+  const [projects, setProjects] = useState<ProjectEntry[]>(init.projects || [
     { id: '1', name: '', hours: 0 },
     { id: '2', name: '', hours: 0 },
   ]);
+  const [isSaving, setIsSaving] = useState(false);
 
   const salaryNum = parseFloat(salary) || 0;
   const totalHours = projects.reduce((acc, p) => acc + (p.hours || 0), 0);
@@ -53,6 +71,19 @@ export function ProrrateoCalculator() {
     setProjects(prev =>
       prev.map(p => (p.id === id ? { ...p, [field]: value } : p))
     );
+  };
+
+  const handleSave = async () => {
+    if (!projectId) return;
+    setIsSaving(true);
+    try {
+      const payload = { salary, projects };
+      await saveToolData(projectId, 'prorrateo-nominas', payload);
+      alert('Guardado con éxito');
+    } catch {
+      alert('Error al guardar');
+    }
+    setIsSaving(false);
   };
 
   const copyText = [
@@ -167,6 +198,30 @@ export function ProrrateoCalculator() {
             </tfoot>
           </table>
         </div>
+
+        {projectId && (
+          <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              style={{
+                backgroundColor: 'var(--primary-600)',
+                color: 'white',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '0.5rem',
+                border: 'none',
+                fontWeight: 500,
+                cursor: isSaving ? 'not-allowed' : 'pointer',
+                opacity: isSaving ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              {isSaving ? 'Guardando...' : '💾 Guardar en Proyecto'}
+            </button>
+          </div>
+        )}
       </ResultPanel>
     </div>
   );

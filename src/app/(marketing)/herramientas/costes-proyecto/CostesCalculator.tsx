@@ -3,6 +3,7 @@
 import React, { useState, useId } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
+import { saveToolData } from '@/app/actions/tools';
 import styles from './costes.module.css';
 
 type PartidaCategory = 'personal' | 'material' | 'actividades' | 'comunicacion' | 'otros';
@@ -26,15 +27,34 @@ interface PartidaEntry {
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
 
-export function CostesCalculator() {
+interface CostesData {
+  projectName?: string;
+  durationMonths?: number;
+  indirectPct?: number;
+  partidas?: PartidaEntry[];
+}
+
+interface CostesCalculatorProps {
+  initialData?: unknown;
+  projectId?: string;
+}
+
+const parseInit = (data: unknown): CostesData =>
+  (data && typeof data === 'object' ? data : {}) as CostesData;
+
+export function CostesCalculator({ initialData, projectId }: CostesCalculatorProps) {
   const uid = useId();
-  const [projectName, setProjectName] = useState('');
-  const [durationMonths, setDurationMonths] = useState(12);
-  const [indirectPct, setIndirectPct] = useState(10);
-  const [partidas, setPartidas] = useState<PartidaEntry[]>([
+  
+  const init = parseInit(initialData);
+
+  const [projectName, setProjectName] = useState<string>(init.projectName || '');
+  const [durationMonths, setDurationMonths] = useState<number>(init.durationMonths || 12);
+  const [indirectPct, setIndirectPct] = useState<number>(init.indirectPct !== undefined ? init.indirectPct : 10);
+  const [partidas, setPartidas] = useState<PartidaEntry[]>(init.partidas || [
     { id: '1', category: 'personal', description: 'Coordinador/a de proyecto (50% jornada)', monthlyAmount: 1200, months: 12 },
     { id: '2', category: 'material', description: 'Material de oficina', monthlyAmount: 150, months: 1 },
   ]);
+  const [isSaving, setIsSaving] = useState(false);
 
   const addPartida = () => {
     setPartidas(prev => [...prev, {
@@ -50,6 +70,19 @@ export function CostesCalculator() {
 
   const updatePartida = (id: string, field: keyof PartidaEntry, value: unknown) => {
     setPartidas(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const handleSave = async () => {
+    if (!projectId) return;
+    setIsSaving(true);
+    try {
+      const payload = { projectName, durationMonths, indirectPct, partidas };
+      await saveToolData(projectId, 'costes-proyecto', payload);
+      alert('Guardado con éxito');
+    } catch {
+      alert('Error al guardar');
+    }
+    setIsSaving(false);
   };
 
   const directTotal = partidas.reduce((acc, p) => acc + (p.monthlyAmount * p.months), 0);
@@ -237,6 +270,30 @@ export function CostesCalculator() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {projectId && (
+          <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              style={{
+                backgroundColor: 'var(--primary-600)',
+                color: 'white',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '0.5rem',
+                border: 'none',
+                fontWeight: 500,
+                cursor: isSaving ? 'not-allowed' : 'pointer',
+                opacity: isSaving ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              {isSaving ? 'Guardando...' : '💾 Guardar en Proyecto'}
+            </button>
           </div>
         )}
       </ResultPanel>

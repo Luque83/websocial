@@ -389,7 +389,7 @@ ${res.activities.map((act, aIdx) => `
                 onClick={async () => {
                   setIsSaving(true);
                   try {
-                    await saveToolData(projectId, 'marco-logico', ml as unknown as any);
+                    await saveToolData(projectId, 'marco-logico', ml);
                     alert('Guardado con éxito');
                   } catch (error) {
                     console.error(error);

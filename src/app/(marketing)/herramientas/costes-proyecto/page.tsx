@@ -1,13 +1,26 @@
 import type { Metadata } from 'next';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { CostesCalculator } from './CostesCalculator';
+import { getToolData } from '@/app/actions/tools';
 
 export const metadata: Metadata = {
   title: 'Calculadora de costes de proyecto',
   description: 'Diseña el presupuesto de tu proyecto social por partidas y obtén el desglose completo con costes indirectos.',
 };
 
-export default function CostesProyectoPage() {
+export default async function CostesProyectoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ projectId?: string }>;
+}) {
+  const sp = await searchParams;
+  const projectId = sp?.projectId as string | undefined;
+  let initialData = undefined;
+
+  if (projectId) {
+    initialData = await getToolData(projectId, 'costes-proyecto');
+  }
+
   return (
     <ToolLayout
       title="Calculadora de costes de proyecto"
@@ -22,7 +35,7 @@ export default function CostesProyectoPage() {
         'Copia o imprime el presupuesto para incluirlo en tu solicitud.',
       ]}
     >
-      <CostesCalculator />
+      <CostesCalculator initialData={initialData} projectId={projectId} />
     </ToolLayout>
   );
 }

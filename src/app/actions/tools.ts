@@ -1,9 +1,9 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { type Json } from '@/types/database';
 
-export async function saveToolData(projectId: string, toolSlug: string, data: Json) {
+
+export async function saveToolData(projectId: string, toolSlug: string, data: unknown) {
   const supabase = await createClient();
 
   // Assuming project_tools table exists and has these columns.
