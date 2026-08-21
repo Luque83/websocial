@@ -1,12 +1,45 @@
-.formGroup { margin-bottom: var(--space-4); }
+﻿.formGroup { margin-bottom: var(--space-4); }
 .label { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-2); }
 .input { width: 100%; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: 0.9375rem; font-family: inherit; color: var(--text-primary); background: var(--bg-surface); transition: border-color var(--duration-fast) var(--ease-default); }
 .input:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-.sectionHeader { font-size: 0.9375rem; font-weight: 600; color: var(--text-primary); margin: var(--space-6) 0 var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
+.sectionHeader { font-size: 0.9375rem; font-weight: 600; color: var(--text-primary); margin: var(--space-6) 0 var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; }
 .deleteBtn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm); transition: var(--transition-interactive); flex-shrink: 0; }
 .deleteBtn:hover { color: var(--color-error-500); background: var(--color-error-50); }
 .addBtn { display: flex; align-items: center; gap: var(--space-2); color: var(--text-brand); font-size: 0.9375rem; font-weight: 500; background: transparent; border: none; cursor: pointer; padding: var(--space-1) 0; margin-top: var(--space-2); font-family: inherit; transition: var(--transition-interactive); }
 .addBtn:hover { color: var(--color-primary-700); text-decoration: underline; }
+
+.tabBar {
+  display: flex;
+  gap: 0.5rem;
+  background: var(--bg-surface-subtle);
+  padding: 0.35rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--border-subtle);
+}
+
+.tabBtn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: none;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.tabActive {
+  background: var(--bg-surface);
+  color: var(--color-primary-600);
+  box-shadow: var(--shadow-sm);
+}
 
 .row2 {
   display: grid;
@@ -17,7 +50,7 @@
 
 .partidasHeader {
   display: grid;
-  grid-template-columns: 160px 1fr 90px 70px 100px 40px;
+  grid-template-columns: 140px 1.5fr 80px 60px 85px 85px 36px;
   gap: var(--space-2);
   padding: 0 0 var(--space-2);
   font-size: 0.75rem;
@@ -27,16 +60,56 @@
   letter-spacing: 0.04em;
 }
 
+.partidaRowCard {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .partidaRow {
   display: grid;
-  grid-template-columns: 160px 1fr 90px 70px 100px 40px;
+  grid-template-columns: 140px 1.5fr 80px 60px 85px 85px 36px;
   gap: var(--space-2);
   align-items: center;
-  margin-bottom: var(--space-2);
+}
+
+.personalDetails {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-primary-50);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-primary-500);
+}
+
+.personalField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.personalField label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary-900);
+}
+
+.personalField input {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-sm);
+  background: white;
 }
 
 .rowTotal {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
   text-align: right;
@@ -121,18 +194,18 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-4);
-  margin-bottom: var(--space-8);
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
 }
 
 .summaryItem {
   background: var(--color-primary-900);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .summaryTotal {
@@ -148,13 +221,13 @@
 }
 
 .summaryValue {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: white;
 }
 
 .summaryValueLg {
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   font-weight: 800;
   color: white;
 }
@@ -167,7 +240,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 .table th {
@@ -200,11 +273,48 @@
 .subtotalRow td {
   background: var(--color-primary-50);
   font-size: 0.875rem;
+  font-weight: 600;
 }
 
-@media (max-width: 768px) {
-  .row2 { grid-template-columns: 1fr; }
-  .summaryGrid { grid-template-columns: 1fr; }
+.badgeOk {
+  background: #dcfce7;
+  color: #166534;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.badgeWarning {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.badgeDanger {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+@media (max-width: 900px) {
+  .summaryGrid { grid-template-columns: 1fr 1fr; }
   .partidasHeader { display: none; }
-  .partidaRow { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+  .partidaRow { grid-template-columns: 1fr; gap: 0.5rem; }
+  .personalDetails { grid-template-columns: 1fr; }
 }

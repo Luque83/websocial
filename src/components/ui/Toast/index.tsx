@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle, XCircle, Info, X } from 'lucide-react';
+import { CheckCircle, XCircle, Info, X, AlertTriangle } from 'lucide-react';
 import styles from './Toast.module.css';
 import type { Toast } from '@/hooks/useToast';
 
@@ -25,6 +25,9 @@ export function ToastContainer({ toasts, removeToast }: ToastContainerProps) {
         } else if (toast.type === 'error') {
           IconComponent = XCircle;
           styleClass = styles.error;
+        } else if (toast.type === 'warning') {
+          IconComponent = AlertTriangle;
+          styleClass = styles.warning || styles.info;
         }
 
         return (

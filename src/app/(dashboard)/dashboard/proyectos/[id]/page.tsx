@@ -61,6 +61,7 @@ export default async function ProjectPage({
 
   // DASHBOARD METRICS CALCULATION
   let totalCost = 0;
+  let totalRealCost = 0;
   let indirectPct = 0;
   const costesTool = toolsDataMap.get('costes-proyecto');
   if (costesTool?.data) {
@@ -68,8 +69,10 @@ export default async function ProjectPage({
     if (Array.isArray(d.partidas)) {
       const partidas = d.partidas as Array<Record<string, unknown>>;
       const direct = partidas.reduce((acc: number, p) => acc + (Number(p.monthlyAmount || 0) * Number(p.months || 1)), 0);
+      const directReal = partidas.reduce((acc: number, p) => acc + (p.costeReal !== undefined ? Number(p.costeReal) : Number(p.monthlyAmount || 0) * Number(p.months || 1)), 0);
       indirectPct = Number(d.indirectPct) || 0;
       totalCost = direct + (direct * indirectPct / 100);
+      totalRealCost = directReal + (directReal * indirectPct / 100);
     }
   }
 
@@ -140,12 +143,14 @@ export default async function ProjectPage({
           <div className={styles.metricCard}>
             <div className={styles.metricHeader}>
               <Calculator size={18} />
-              Presupuesto Global
+              Presupuesto vs. Real
             </div>
             <div className={styles.metricValue}>
               {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(totalCost)}
             </div>
-            <p className={styles.metricSubtitle}>Incluye {indirectPct}% de costes indirectos</p>
+            <p className={styles.metricSubtitle}>
+              Gastado real: {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(totalRealCost)} ({totalCost > 0 ? ((totalRealCost / totalCost) * 100).toFixed(0) : 0}%)
+            </p>
           </div>
           
           <div className={styles.metricCard}>

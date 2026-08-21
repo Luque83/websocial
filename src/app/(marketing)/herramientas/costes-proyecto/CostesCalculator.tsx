@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useId } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, AlertTriangle, AlertCircle, FileSpreadsheet, TrendingUp } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
 import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
@@ -36,6 +36,10 @@ interface PartidaEntry {
   description: string;
   monthlyAmount: number;
   months: number;
+  // Campos avanzados de personal y justificación
+  puesto?: string;
+  funciones?: string;
+  costeReal?: number; // Gasto real justificado/pagado
 }
 
 const formatCurrency = (n: number) =>
@@ -102,422 +106,545 @@ function extractMLActivities(data: unknown): MLActivity[] {
   return activities;
 }
 
-interface ProrrateoItem {
-  workerRole?: string;
-  monthlyTotalCost?: number;
-  results?: Array<{
-    name: string;
-    monthlyTotal: number;
-  }>;
+interface ProrrateoWorker {
+  role?: string;
+  cost?: number;
 }
 
-function extractProrrateoPersonnel(data: unknown, currentProjectName?: string): { description: string; monthlyAmount: number } | null {
+function extractProrrateoData(data: unknown): ProrrateoWorker | null {
   if (!data || typeof data !== 'object') return null;
-  const p = data as Record<string, unknown>;
-  const role = typeof p.workerRole === 'string' && p.workerRole.trim() ? p.workerRole : 'Técnico de Proyecto (Prorrateo)';
+  const d = data as Record<string, unknown>;
+  const salary = parseFloat(String(d.salary || 0)) || 0;
+  const pagas = Number(d.pagas) || 12;
+  const ssPct = d.ssPct !== undefined && !isNaN(Number(d.ssPct)) ? Number(d.ssPct) : 31.4;
+  const workerRole = typeof d.workerRole === 'string' ? d.workerRole : 'Técnico de Proyecto';
   
-  // Si hay summary y results
-  const summary = p.summary as ProrrateoItem | undefined;
-  if (summary && Array.isArray(summary.results)) {
-    const matched = summary.results.find(r => 
-      currentProjectName && r.name.toLowerCase().trim() === currentProjectName.toLowerCase().trim()
-    );
-    if (matched && matched.monthlyTotal > 0) {
-      return {
-        description: `${role} (${matched.name})`,
-        monthlyAmount: matched.monthlyTotal
-      };
-    }
-    if (summary.monthlyTotalCost && summary.monthlyTotalCost > 0) {
-      return {
-        description: role,
-        monthlyAmount: summary.monthlyTotalCost
-      };
-    }
-  }
+  const salarioMes = pagas === 14 ? (salary * 14) / 12 : salary;
+  const ssMes = (salarioMes * ssPct) / 100;
+  const costeTotalMes = salarioMes + ssMes;
 
-  // Fallback si solo tiene salary bruto
-  const salary = parseFloat(String(p.salary || '0')) || 0;
-  const ssPct = parseFloat(String(p.ssPct || '31.4')) || 31.4;
-  if (salary > 0) {
-    const totalCost = salary * (1 + ssPct / 100);
-    return {
-      description: role,
-      monthlyAmount: totalCost
-    };
-  }
-
-  return null;
+  return {
+    role: workerRole,
+    cost: costeTotalMes
+  };
 }
 
-export function CostesCalculator({ initialData, projectId, projectName: externalProjectName, mlData, prorrateoData }: CostesCalculatorProps) {
+export function CostesCalculator({
+  initialData,
+  projectId,
+  projectName: externalProjectName,
+  mlData,
+  prorrateoData,
+}: CostesCalculatorProps) {
   const uid = useId();
-  
   const init = parseInit(initialData);
   const { toasts, showToast, removeToast } = useToast();
 
-  const [localProjectName, setLocalProjectName] = useState<string>(init.projectName || '');
-  const projectName = externalProjectName || localProjectName;
-
-  const [durationMonths, setDurationMonths] = useState<number>(init.durationMonths || 12);
-  const [indirectPct, setIndirectPct] = useState<number>(init.indirectPct !== undefined ? init.indirectPct : 10);
-  const [aportacionPropia, setAportacionPropia] = useState<number>(init.aportacionPropia || 0);
-  
-  const mlActivities = React.useMemo(() => extractMLActivities(mlData), [mlData]);
-  const prorrateoPersonnel = React.useMemo(() => extractProrrateoPersonnel(prorrateoData, projectName), [prorrateoData, projectName]);
-  
-  const [partidas, setPartidas] = useState<PartidaEntry[]>(() => {
-    if (init.partidas && init.partidas.length > 0) return init.partidas;
-    
-    // Si no hay datos guardados pero hay actividades en ML, usarlas
-    if (mlActivities.length > 0) {
-      return mlActivities.map((act, idx) => ({
-        id: Date.now().toString() + idx,
-        category: 'actividades',
-        description: act.description,
-        monthlyAmount: parseFloat(act.cost) || 0,
-        months: 1
-      }));
-    }
-    
-    // Por defecto
-    return [
-      { id: '1', category: 'personal', description: 'Coordinador/a de proyecto (Coste empresa)', monthlyAmount: 1650, months: 12 },
-      { id: '2', category: 'material', description: 'Material fungible y de oficina', monthlyAmount: 150, months: 1 },
-    ];
-  });
+  const [activeTab, setActiveTab] = useState<'presupuesto' | 'seguimiento'>('presupuesto');
+  const [projectName, setProjectName] = useState<string>(
+    externalProjectName || init.projectName || ''
+  );
+  const [durationMonths, setDurationMonths] = useState<number>(
+    init.durationMonths ?? 12
+  );
+  const [indirectPct, setIndirectPct] = useState<number>(
+    init.indirectPct ?? 10
+  );
+  const [aportacionPropia, setAportacionPropia] = useState<number>(
+    init.aportacionPropia ?? 0
+  );
+  const [partidas, setPartidas] = useState<PartidaEntry[]>(
+    init.partidas && init.partidas.length > 0
+      ? init.partidas
+      : [
+          {
+            id: '1',
+            category: 'personal',
+            description: 'Técnico/a de Proyecto (Trabajador/a Social)',
+            puesto: 'Trabajador/a Social',
+            funciones: 'Atención directa, acogida, diseño de itinerarios y coordinación de servicios.',
+            monthlyAmount: 2100,
+            months: 12,
+            costeReal: 2100 * 12,
+          },
+          {
+            id: '2',
+            category: 'material',
+            description: 'Material didáctico y licencias formativas',
+            monthlyAmount: 250,
+            months: 10,
+            costeReal: 2400,
+          },
+          {
+            id: '3',
+            category: 'actividades',
+            description: 'Talleres de capacitación y salidas comunitarias',
+            monthlyAmount: 400,
+            months: 8,
+            costeReal: 3200,
+          },
+        ]
+  );
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSyncML = () => {
-    let addedCount = 0;
-    const newPartidas = [...partidas];
-    
-    mlActivities.forEach((mlAct, idx) => {
-      const exists = newPartidas.some(p => p.description.toLowerCase().trim() === mlAct.description.toLowerCase().trim());
-      if (!exists && mlAct.description.trim()) {
-        newPartidas.push({
-          id: Date.now().toString() + 'sync' + idx,
-          category: 'actividades',
-          description: mlAct.description,
-          monthlyAmount: parseFloat(mlAct.cost) || 0,
-          months: 1
-        });
-        addedCount++;
-      }
-    });
-
-    if (addedCount > 0) {
-      setPartidas(newPartidas);
-      showToast(`Se han sincronizado ${addedCount} actividades del Marco Lógico`, 'success');
-    } else {
-      showToast('No hay actividades nuevas en el Marco Lógico', 'info');
-    }
-  };
-
-  const handleSyncProrrateo = () => {
-    if (!prorrateoPersonnel) {
-      showToast('No se encontraron datos de personal en el Prorrateo', 'info');
-      return;
-    }
-
-    const newPartidas = [...partidas];
-    const exists = newPartidas.some(p => p.description.toLowerCase().includes(prorrateoPersonnel.description.toLowerCase()));
-
-    if (exists) {
-      showToast('El puesto de personal ya está en el presupuesto', 'info');
-      return;
-    }
-
-    newPartidas.unshift({
-      id: Date.now().toString() + 'prorrateo',
-      category: 'personal',
-      description: prorrateoPersonnel.description,
-      monthlyAmount: Math.round(prorrateoPersonnel.monthlyAmount * 100) / 100,
-      months: durationMonths
-    });
-
-    setPartidas(newPartidas);
-    showToast(`Personal importado: ${prorrateoPersonnel.description}`, 'success');
-  };
+  const mlActivities = extractMLActivities(mlData);
+  const prorrateoWorker = extractProrrateoData(prorrateoData);
 
   const addPartida = () => {
-    setPartidas(prev => [...prev, {
-      id: Date.now().toString(),
+    const newEntry: PartidaEntry = {
+      id: String(Date.now()),
       category: 'personal',
       description: '',
       monthlyAmount: 0,
       months: durationMonths,
-    }]);
+      puesto: '',
+      funciones: '',
+      costeReal: 0,
+    };
+    setPartidas(prev => [...prev, newEntry]);
   };
-
-  const removePartida = (id: string) => setPartidas(prev => prev.filter(p => p.id !== id));
 
   const updatePartida = (id: string, field: keyof PartidaEntry, value: unknown) => {
-    setPartidas(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    setPartidas(prev =>
+      prev.map(p => {
+        if (p.id !== id) return p;
+        const updated = { ...p, [field]: value };
+        return updated;
+      })
+    );
   };
+
+  const removePartida = (id: string) => {
+    setPartidas(prev => prev.filter(p => p.id !== id));
+  };
+
+  const importFromML = () => {
+    if (mlActivities.length === 0) {
+      showToast('No se encontraron actividades en el Marco Lógico', 'warning');
+      return;
+    }
+    const newPartidas: PartidaEntry[] = mlActivities.map((act, index) => {
+      const parsedCost = parseFloat(act.cost) || 0;
+      return {
+        id: `ml-${Date.now()}-${index}`,
+        category: 'actividades',
+        description: act.description,
+        monthlyAmount: parsedCost > 0 ? parsedCost : 100,
+        months: 1,
+        costeReal: parsedCost > 0 ? parsedCost : 100,
+      };
+    });
+    setPartidas(prev => [...prev, ...newPartidas]);
+    showToast(`Se importaron ${newPartidas.length} actividades del Marco Lógico`, 'success');
+  };
+
+  const importFromProrrateo = () => {
+    if (!prorrateoWorker) {
+      showToast('No se encontraron datos en Prorrateo de Nóminas', 'warning');
+      return;
+    }
+    const newPersonalPartida: PartidaEntry = {
+      id: `prorrateo-${Date.now()}`,
+      category: 'personal',
+      description: `${prorrateoWorker.role || 'Puesto técnico'} (Coste Empresa Prorrateado)`,
+      puesto: prorrateoWorker.role || 'Técnico de Proyecto',
+      funciones: 'Ejecución técnica y gestión directa del proyecto social.',
+      monthlyAmount: Math.round(prorrateoWorker.cost || 0),
+      months: durationMonths,
+      costeReal: Math.round(prorrateoWorker.cost || 0) * durationMonths,
+    };
+    setPartidas(prev => [...prev, newPersonalPartida]);
+    showToast(`Personal importado desde Prorrateo (${formatCurrency(newPersonalPartida.monthlyAmount)}/mes)`, 'success');
+  };
+
+  // Cálculos Presupuestados
+  const directCostsPresupuesto = partidas.reduce(
+    (sum, p) => sum + (p.monthlyAmount || 0) * (p.months || 0),
+    0
+  );
+  const indirectCostsPresupuesto = (directCostsPresupuesto * indirectPct) / 100;
+  const totalProjectCostPresupuesto = directCostsPresupuesto + indirectCostsPresupuesto;
+  const subvencionSolicitadaPresupuesto = Math.max(0, totalProjectCostPresupuesto - (aportacionPropia || 0));
+
+  // Cálculos Reales Ejecutados
+  const directCostsReal = partidas.reduce(
+    (sum, p) => sum + (p.costeReal !== undefined ? p.costeReal : (p.monthlyAmount || 0) * (p.months || 0)),
+    0
+  );
+  const indirectCostsReal = (directCostsReal * indirectPct) / 100;
+  const totalProjectCostReal = directCostsReal + indirectCostsReal;
+  
+  // Desviación Global
+  const desviacionTotal = totalProjectCostPresupuesto - totalProjectCostReal;
+  const pctEjecucion = totalProjectCostPresupuesto > 0 
+    ? (totalProjectCostReal / totalProjectCostPresupuesto) * 100 
+    : 0;
 
   const handleSave = async () => {
     if (!projectId) return;
     setIsSaving(true);
     try {
-      const payload = { projectName, durationMonths, indirectPct, aportacionPropia, partidas };
+      const payload: CostesData = {
+        projectName,
+        durationMonths,
+        indirectPct,
+        aportacionPropia,
+        partidas,
+      };
       await saveToolData(projectId, 'costes-proyecto', payload);
-      showToast('Costes guardados con éxito', 'success');
+      showToast('Presupuesto y seguimiento guardados con éxito', 'success');
     } catch {
-      showToast('Error al guardar los costes', 'error');
+      showToast('Error al guardar costes', 'error');
     }
     setIsSaving(false);
   };
 
-  const directTotal = partidas.reduce((acc, p) => acc + (p.monthlyAmount * p.months), 0);
-  const indirectAmount = directTotal * indirectPct / 100;
-  const grandTotal = directTotal + indirectAmount;
-  const subvencionSolicitada = Math.max(0, grandTotal - aportacionPropia);
-
-  const byCategory = (Object.keys(PARTIDA_LABELS) as PartidaCategory[]).map(cat => ({
-    category: cat,
-    label: PARTIDA_LABELS[cat],
-    items: partidas.filter(p => p.category === cat),
-    subtotal: partidas.filter(p => p.category === cat).reduce((acc, p) => acc + p.monthlyAmount * p.months, 0),
-  })).filter(g => g.items.length > 0);
-
   const copyText = [
-    `PRESUPUESTO: ${projectName || 'Sin nombre'}`,
-    `Duración: ${durationMonths} meses`,
+    `PRESUPUESTO Y LIQUIDACIÓN ECONÓMICA: ${projectName || 'Sin título'}`,
+    `Duración: ${durationMonths} meses | Costes Indirectos: ${indirectPct}%`,
     '',
-    ...byCategory.flatMap(g => [
-      `## ${g.label}`,
-      ...g.items.map(p => `  ${p.description || '(sin descripción)'}: ${formatCurrency(p.monthlyAmount)} x ${p.months} meses = ${formatCurrency(p.monthlyAmount * p.months)}`),
-      `  Subtotal ${g.label}: ${formatCurrency(g.subtotal)}`,
-      '',
-    ]),
-    `Subtotal costes directos: ${formatCurrency(directTotal)}`,
-    `Costes indirectos (${indirectPct}%): ${formatCurrency(indirectAmount)}`,
-    `TOTAL PRESUPUESTO: ${formatCurrency(grandTotal)}`,
+    '--- CUADRO DE EJECUCIÓN FINANCIERA (PRESUPUESTO VS. REAL) ---',
+    ...partidas.map(p => {
+      const pres = (p.monthlyAmount || 0) * (p.months || 0);
+      const real = p.costeReal !== undefined ? p.costeReal : pres;
+      const desv = pres - real;
+      return `• [${p.category.toUpperCase()}] ${p.description || 'Sin concepto'}${p.funciones ? ` (Funciones: ${p.funciones})` : ''}: Presupuestado: ${formatCurrency(pres)} | Real: ${formatCurrency(real)} | Desviación: ${formatCurrency(desv)}`;
+    }),
+    '',
+    `Costes Directos Presupuestados: ${formatCurrency(directCostsPresupuesto)} | Real: ${formatCurrency(directCostsReal)}`,
+    `Costes Indirectos Presupuestados (${indirectPct}%): ${formatCurrency(indirectCostsPresupuesto)} | Real: ${formatCurrency(indirectCostsReal)}`,
+    `TOTAL COSTE PROYECTO: Presupuestado: ${formatCurrency(totalProjectCostPresupuesto)} | Real: ${formatCurrency(totalProjectCostReal)}`,
+    `EJECUCIÓN FINANCIERA: ${pctEjecucion.toFixed(2)}% | Remanente / Saldo: ${formatCurrency(desviacionTotal)}`,
   ].join('\n');
-
-  const isEmpty = partidas.every(p => p.monthlyAmount === 0);
 
   return (
     <div id="costes-export-target">
+      {/* Pestañas de Vista */}
+      <div className={styles.tabBar}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('presupuesto')}
+          className={`${styles.tabBtn} ${activeTab === 'presupuesto' ? styles.tabActive : ''}`}
+        >
+          <FileSpreadsheet size={18} />
+          <span>1. Formulación del Presupuesto</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('seguimiento')}
+          className={`${styles.tabBtn} ${activeTab === 'seguimiento' ? styles.tabActive : ''}`}
+        >
+          <TrendingUp size={18} />
+          <span>2. Control de Gastos Reales vs. Presupuesto</span>
+        </button>
+      </div>
+
       <div className={styles.row2}>
         <div className={styles.formGroup}>
-          <label htmlFor={`${uid}-name`} className={styles.label}>Nombre del proyecto</label>
+          <label htmlFor={`${uid}-project`} className={styles.label}>
+            Nombre del proyecto
+          </label>
           <input
-            id={`${uid}-name`}
+            id={`${uid}-project`}
             type="text"
             className={styles.input}
+            placeholder="Ej: Programa de Acompañamiento Social"
             value={projectName}
-            onChange={e => setLocalProjectName(e.target.value)}
+            onChange={e => setProjectName(e.target.value)}
             disabled={!!externalProjectName}
-            placeholder="Ej: Proyecto de inserción laboral 2026"
           />
         </div>
         <div className={styles.formGroup}>
-          <label htmlFor={`${uid}-dur`} className={styles.label}>Duración (meses)</label>
+          <label htmlFor={`${uid}-duration`} className={styles.label}>
+            Duración (meses)
+          </label>
           <input
-            id={`${uid}-dur`}
+            id={`${uid}-duration`}
             type="number"
-            min="1"
-            max="60"
+            min={1}
+            max={60}
             className={styles.input}
             value={durationMonths}
-            onChange={e => setDurationMonths(parseInt(e.target.value) || 12)}
+            onChange={e => setDurationMonths(Math.max(1, parseInt(e.target.value) || 1))}
           />
         </div>
       </div>
 
-      <div className={styles.sectionHeader}>Partidas presupuestarias</div>
+      <div className={styles.sectionHeader}>
+        <span>Partidas de Gasto y Personal</span>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {prorrateoWorker && (
+            <button type="button" onClick={importFromProrrateo} className={styles.syncBtn}>
+              👤 Importar Personal (Prorrateo)
+            </button>
+          )}
+          {mlActivities.length > 0 && (
+            <button type="button" onClick={importFromML} className={styles.syncBtn}>
+              📥 Importar Actividades (Marco Lógico)
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className={styles.partidasHeader}>
         <span>Categoría</span>
-        <span>Descripción</span>
-        <span>€/mes</span>
+        <span>Concepto / Puesto</span>
+        <span>{activeTab === 'presupuesto' ? 'Coste/mes' : 'Presupuest.'}</span>
         <span>Meses</span>
-        <span>Total</span>
+        <span>Total Presup.</span>
+        <span>Gasto Real</span>
         <span></span>
       </div>
-      {partidas.map(p => (
-        <div key={p.id} className={styles.partidaRow}>
-          <select
-            className={styles.input}
-            value={p.category}
-            onChange={e => updatePartida(p.id, 'category', e.target.value as PartidaCategory)}
-          >
-            {(Object.entries(PARTIDA_LABELS) as [PartidaCategory, string][]).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-          <input
-            type="text"
-            className={styles.input}
-            value={p.description}
-            onChange={e => updatePartida(p.id, 'description', e.target.value)}
-            placeholder="Descripción"
-          />
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            className={styles.input}
-            value={p.monthlyAmount || ''}
-            onChange={e => updatePartida(p.id, 'monthlyAmount', parseFloat(e.target.value) || 0)}
-            placeholder="0"
-          />
-          <input
-            type="number"
-            min="1"
-            max="60"
-            className={styles.input}
-            value={p.months || ''}
-            onChange={e => updatePartida(p.id, 'months', parseInt(e.target.value) || 1)}
-          />
-          <span className={styles.rowTotal}>{formatCurrency(p.monthlyAmount * p.months)}</span>
-          <button className={styles.deleteBtn} onClick={() => removePartida(p.id)} aria-label="Eliminar partida">
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ))}
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-        <button className={styles.addBtn} onClick={addPartida}>
-          <Plus size={16} />
-          Añadir partida
-        </button>
-        {mlActivities.length > 0 && (
-          <button 
-            className={styles.syncBtn} 
-            onClick={handleSyncML}
-            title="Importar actividades como partidas del presupuesto"
-          >
-            📋 Sincronizar Actividades (Marco Lógico)
-          </button>
-        )}
-        {prorrateoPersonnel && (
-          <button 
-            className={styles.syncBtn} 
-            onClick={handleSyncProrrateo}
-            title="Importar coste imputado del trabajador"
-          >
-            👤 Importar Personal (Prorrateo)
-          </button>
-        )}
-      </div>
 
-      <div className={styles.sectionHeader}>Costes indirectos y Financiación</div>
-      <div className={styles.row2}>
+      {partidas.map((partida) => {
+        const partidaTotalPresupuesto = (partida.monthlyAmount || 0) * (partida.months || 0);
+        const isPersonal = partida.category === 'personal';
+
+        return (
+          <div key={partida.id} className={styles.partidaRowCard}>
+            <div className={styles.partidaRow}>
+              <select
+                className={styles.input}
+                value={partida.category}
+                onChange={e => updatePartida(partida.id, 'category', e.target.value as PartidaCategory)}
+              >
+                {(Object.entries(PARTIDA_LABELS) as [PartidaCategory, string][]).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                className={styles.input}
+                placeholder={isPersonal ? 'Ej: Técnico/a de Proyecto (Trabajador Social)' : 'Descripción de la partida'}
+                value={partida.description}
+                onChange={e => updatePartida(partida.id, 'description', e.target.value)}
+              />
+
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className={styles.input}
+                placeholder="€/mes"
+                value={partida.monthlyAmount || ''}
+                onChange={e => updatePartida(partida.id, 'monthlyAmount', parseFloat(e.target.value) || 0)}
+              />
+
+              <input
+                type="number"
+                min={1}
+                max={60}
+                className={styles.input}
+                value={partida.months || ''}
+                onChange={e => updatePartida(partida.id, 'months', parseInt(e.target.value) || 0)}
+              />
+
+              <div className={styles.rowTotal}>{formatCurrency(partidaTotalPresupuesto)}</div>
+
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className={styles.input}
+                placeholder="€ Real"
+                style={{ backgroundColor: activeTab === 'seguimiento' ? '#f0fdf4' : undefined, fontWeight: 600 }}
+                value={partida.costeReal !== undefined ? partida.costeReal : ''}
+                onChange={e => updatePartida(partida.id, 'costeReal', parseFloat(e.target.value) || 0)}
+              />
+
+              <button
+                type="button"
+                onClick={() => removePartida(partida.id)}
+                className={styles.deleteBtn}
+                title="Eliminar partida"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+
+            {/* Ficha de Imputación de Personal si la categoría es Personal */}
+            {isPersonal && (
+              <div className={styles.personalDetails}>
+                <div className={styles.personalField}>
+                  <label>Puesto / Categoría Convenio:</label>
+                  <input
+                    type="text"
+                    value={partida.puesto || ''}
+                    onChange={e => updatePartida(partida.id, 'puesto', e.target.value)}
+                    placeholder="Ej: Grupo 1 - Trabajador/a Social Titulado/a"
+                  />
+                </div>
+                <div className={styles.personalField}>
+                  <label>Funciones desempeñadas en el proyecto:</label>
+                  <input
+                    type="text"
+                    value={partida.funciones || ''}
+                    onChange={e => updatePartida(partida.id, 'funciones', e.target.value)}
+                    placeholder="Ej: Acogida, diagnóstico social y tutorías individuales de seguimiento"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <button type="button" onClick={addPartida} className={styles.addBtn}>
+        <Plus size={16} />
+        Añadir partida de gasto
+      </button>
+
+      {/* Configuración de Costes Indirectos y Cofinanciación */}
+      <div style={{ marginTop: '2rem' }}>
         <div className={styles.sliderGroup}>
           <div className={styles.sliderHeader}>
-            <label htmlFor={`${uid}-indirect`} className={styles.label}>Costes indirectos (% gastos generales)</label>
-            <span className={styles.sliderValue}>{indirectPct}%</span>
+            <label htmlFor={`${uid}-slider`} className={styles.label} style={{ margin: 0 }}>
+              Costes Indirectos y de Estructura (%)
+            </label>
+            <span className={styles.sliderValue}>{indirectPct}% ({formatCurrency(indirectCostsPresupuesto)})</span>
           </div>
           <input
-            id={`${uid}-indirect`}
+            id={`${uid}-slider`}
             type="range"
-            min="0"
-            max="25"
-            step="1"
-            className={styles.slider}
+            min={0}
+            max={25}
+            step={1}
             value={indirectPct}
-            onChange={e => setIndirectPct(parseInt(e.target.value))}
+            onChange={e => setIndirectPct(parseInt(e.target.value) || 0)}
+            className={styles.slider}
           />
-          {indirectPct > 15 ? (
+          <p className={styles.sliderHint}>
+            Calculado automáticamente sobre el total de costes directos.
+          </p>
+
+          {indirectPct > 15 && (
             <div className={styles.alertWarning}>
-              ⚠️ <strong>Tope habitual excedido:</strong> El {indirectPct}% supera el 10-15% fijado como límite en la mayoría de convocatorias públicas (IRPF, Ministerios, FSE). Revisa las bases.
+              <AlertTriangle size={18} />
+              <span><strong>Advertencia de Auditoría:</strong> La mayoría de convocatorias públicas (IRPF, FSE, Ministerios) limitan los costes indirectos a un máximo del <strong>10% o 15%</strong>.</span>
             </div>
-          ) : indirectPct > 10 ? (
-            <div className={styles.alertWarning}>
-              ℹ️ <strong>Nota de convocatoria:</strong> El {indirectPct}% está entre el 10% y el 15%. Algunas bases locales o autonómicas exigen un máximo estricto del 10%.
-            </div>
-          ) : (
-            <p className={styles.sliderHint}>Dentro de los límites habituales aceptados (hasta el 10%).</p>
           )}
         </div>
 
-        <div className={styles.formGroup}>
-          <label htmlFor={`${uid}-aportacion`} className={styles.label}>
-            Aportación propia / Cofinanciación (€)
-          </label>
-          <input
-            id={`${uid}-aportacion`}
-            type="number"
-            min="0"
-            step="0.01"
-            className={styles.input}
-            value={aportacionPropia || ''}
-            onChange={e => setAportacionPropia(parseFloat(e.target.value) || 0)}
-            placeholder="0 € (Fondos propios entidad)"
-          />
-          <span className={styles.sliderHint}>Importe que asume la entidad u otros financiadores privados.</span>
+        <div className={styles.row2}>
+          <div className={styles.formGroup}>
+            <label htmlFor={`${uid}-propia`} className={styles.label}>
+              Aportación Propia / Cofinanciación de la Entidad (€)
+            </label>
+            <input
+              id={`${uid}-propia`}
+              type="number"
+              min={0}
+              step="0.01"
+              className={styles.input}
+              placeholder="0,00 €"
+              value={aportacionPropia || ''}
+              onChange={e => setAportacionPropia(parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Subvención Solicitada</label>
+            <div className={styles.input} style={{ background: 'var(--color-primary-50)', fontWeight: 700, color: 'var(--color-primary-800)' }}>
+              {formatCurrency(subvencionSolicitadaPresupuesto)}
+            </div>
+          </div>
         </div>
       </div>
 
-      <ResultPanel
-        title="Presupuesto y Plan Financiero del Proyecto"
-        copyText={isEmpty ? undefined : copyText}
-        isEmpty={isEmpty}
-        emptyMessage="Añade partidas con importes para calcular el presupuesto."
-      >
-        <div className={styles.summaryGrid}>
-          <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Costes directos</span>
-            <span className={styles.summaryValue}>{formatCurrency(directTotal)}</span>
+      {/* Resultados y Control Presupuestario */}
+      <ResultPanel title="Liquidación y Control Financiero del Proyecto" copyText={copyText}>
+        <div id="costes-document-target">
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>Total Presupuestado</span>
+              <span className={styles.summaryValueLg}>{formatCurrency(totalProjectCostPresupuesto)}</span>
+            </div>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>Total Gastado Real</span>
+              <span className={styles.summaryValueLg}>{formatCurrency(totalProjectCostReal)}</span>
+            </div>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>Ejecución %</span>
+              <span className={styles.summaryValueLg} style={{ color: pctEjecucion > 105 ? '#f87171' : '#34d399' }}>
+                {pctEjecucion.toFixed(1)}%
+              </span>
+            </div>
+            <div className={`${styles.summaryItem} ${styles.summaryTotal}`}>
+              <span className={styles.summaryLabel}>Saldo / Remanente</span>
+              <span className={styles.summaryValueLg}>{formatCurrency(desviacionTotal)}</span>
+            </div>
           </div>
-          <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Costes indirectos ({indirectPct}%)</span>
-            <span className={styles.summaryValue}>{formatCurrency(indirectAmount)}</span>
-          </div>
-          <div className={`${styles.summaryItem} ${styles.summaryTotal}`}>
-            <span className={styles.summaryLabel}>Coste total del proyecto</span>
-            <span className={styles.summaryValueLg}>{formatCurrency(grandTotal)}</span>
-          </div>
-        </div>
 
-        {aportacionPropia > 0 && (
-          <div className={styles.alertSuccess} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span><strong>Subvención solicitada al financiador:</strong> {formatCurrency(subvencionSolicitada)} ({((subvencionSolicitada / (grandTotal || 1)) * 100).toFixed(1)}%)</span>
-            <span><strong>Aportación propia:</strong> {formatCurrency(aportacionPropia)} ({((aportacionPropia / (grandTotal || 1)) * 100).toFixed(1)}%)</span>
-          </div>
-        )}
-
-        {byCategory.length > 0 && (
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Partida</th>
-                  <th>Descripción</th>
-                  <th className={styles.numCol}>€/mes</th>
-                  <th className={styles.numCol}>Meses</th>
-                  <th className={styles.numCol}>Total</th>
+                  <th>Partida / Personal y Funciones</th>
+                  <th className={styles.numCol}>Presupuestado</th>
+                  <th className={styles.numCol}>Gasto Real</th>
+                  <th className={styles.numCol}>Desviación</th>
+                  <th>Estado Auditoría</th>
                 </tr>
               </thead>
               <tbody>
-                {byCategory.map(group => (
-                  <React.Fragment key={group.category}>
-                    <tr className={styles.categoryRow}>
-                      <td colSpan={5}><strong>{group.label}</strong></td>
+                {partidas.map(p => {
+                  const pres = (p.monthlyAmount || 0) * (p.months || 0);
+                  const real = p.costeReal !== undefined ? p.costeReal : pres;
+                  const desv = pres - real;
+                  const pct = pres > 0 ? (real / pres) * 100 : 100;
+
+                  let badge = <span className={styles.badgeOk}><CheckCircle2 size={12} /> Correcto ({pct.toFixed(0)}%)</span>;
+                  if (pct < 70) {
+                    badge = <span className={styles.badgeWarning}><AlertTriangle size={12} /> Infraejecución ({pct.toFixed(0)}%)</span>;
+                  } else if (pct > 110) {
+                    badge = <span className={styles.badgeDanger}><AlertCircle size={12} /> Sobrecoste ({pct.toFixed(0)}%)</span>;
+                  }
+
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <strong>{p.description || 'Sin concepto'}</strong>
+                        {p.puesto && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>👤 {p.puesto}</div>}
+                        {p.funciones && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📋 {p.funciones}</div>}
+                      </td>
+                      <td className={styles.numCol}>{formatCurrency(pres)}</td>
+                      <td className={styles.numCol} style={{ fontWeight: 600 }}>{formatCurrency(real)}</td>
+                      <td className={styles.numCol} style={{ color: desv < 0 ? '#dc2626' : '#16a34a' }}>
+                        {formatCurrency(desv)}
+                      </td>
+                      <td>{badge}</td>
                     </tr>
-                    {group.items.map(item => (
-                      <tr key={item.id}>
-                        <td></td>
-                        <td>{item.description || '—'}</td>
-                        <td className={styles.numCol}>{formatCurrency(item.monthlyAmount)}</td>
-                        <td className={styles.numCol}>{item.months}</td>
-                        <td className={styles.numCol}>{formatCurrency(item.monthlyAmount * item.months)}</td>
-                      </tr>
-                    ))}
-                    <tr className={styles.subtotalRow}>
-                      <td colSpan={4} style={{textAlign: 'right', paddingRight: 'var(--space-4)'}}>Subtotal {group.label}:</td>
-                      <td className={styles.numCol}><strong>{formatCurrency(group.subtotal)}</strong></td>
-                    </tr>
-                  </React.Fragment>
-                ))}
+                  );
+                })}
+                <tr className={styles.subtotalRow}>
+                  <td><strong>Costes Indirectos ({indirectPct}%)</strong></td>
+                  <td className={styles.numCol}>{formatCurrency(indirectCostsPresupuesto)}</td>
+                  <td className={styles.numCol}>{formatCurrency(indirectCostsReal)}</td>
+                  <td className={styles.numCol}>{formatCurrency(indirectCostsPresupuesto - indirectCostsReal)}</td>
+                  <td>—</td>
+                </tr>
+                <tr style={{ background: 'var(--color-primary-100)', fontWeight: 700, fontSize: '0.9375rem' }}>
+                  <td>TOTAL PROYECTO (DIRECTOS + INDIRECTOS)</td>
+                  <td className={styles.numCol}>{formatCurrency(totalProjectCostPresupuesto)}</td>
+                  <td className={styles.numCol}>{formatCurrency(totalProjectCostReal)}</td>
+                  <td className={styles.numCol} style={{ color: desviacionTotal < 0 ? '#dc2626' : '#16a34a' }}>
+                    {formatCurrency(desviacionTotal)}
+                  </td>
+                  <td>
+                    {pctEjecucion >= 85 && pctEjecucion <= 105 ? (
+                      <span className={styles.badgeOk}><CheckCircle2 size={12} /> Justificación 100%</span>
+                    ) : (
+                      <span className={styles.badgeWarning}><AlertTriangle size={12} /> Revisar Desviación</span>
+                    )}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
-        )}
-        
+        </div>
+
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }} className="no-print">
-          <ExportPdfButton targetId="costes-export-target" filename="presupuesto" projectName={projectName} />
+          <ExportPdfButton targetId="costes-document-target" filename="control-presupuestario-justificacion" projectName={projectName} />
           {projectId && (
             <button
               onClick={handleSave}
@@ -533,7 +660,7 @@ export function CostesCalculator({ initialData, projectId, projectName: external
                 opacity: isSaving ? 0.7 : 1,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.5rem'
+                gap: '0.5rem',
               }}
             >
               {isSaving ? 'Guardando...' : '💾 Guardar en Proyecto'}
