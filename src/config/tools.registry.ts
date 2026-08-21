@@ -70,9 +70,9 @@ export const TOOLS_REGISTRY: ToolRegistryEntry[] = [
     description: 'Planifica y visualiza el calendario de tu proyecto en formato Gantt.',
     iconName: 'Calendar',
     category: 'gestion',
-    status: 'coming-soon',
+    status: 'available',
     publicHref: '/herramientas/cronograma',
-    dashboardEnabled: false,
+    dashboardEnabled: true,
   },
 ];
 

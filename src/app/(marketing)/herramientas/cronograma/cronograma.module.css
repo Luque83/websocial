@@ -1,0 +1,205 @@
+﻿.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.label {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.input {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+
+.input:disabled {
+  background-color: var(--bg-body);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.sectionHeader {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.actividadesHeader {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-body);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  align-items: center;
+}
+
+.actividadRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+}
+
+.deleteBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.deleteBtn:hover {
+  background-color: var(--color-danger-50);
+  color: var(--color-danger-600);
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  align-self: flex-start;
+}
+
+.addBtn:hover {
+  background-color: var(--color-primary-100);
+}
+
+/* Gantt Chart Styles */
+.ganttWrapper {
+  overflow-x: auto;
+  padding-bottom: 1rem;
+}
+
+.ganttTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+  font-size: 0.875rem;
+}
+
+.ganttTable th, .ganttTable td {
+  border: 1px solid var(--border-color);
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.ganttTable th {
+  background-color: var(--bg-body);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ganttTable th:first-child, .ganttTable td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background-color: white;
+  z-index: 10;
+  min-width: 250px;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+}
+.ganttTable th:first-child {
+  background-color: var(--bg-body);
+}
+
+.ganttTable td:nth-child(2) {
+  text-align: left;
+  min-width: 150px;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.monthCell {
+  width: 40px;
+  min-width: 40px;
+  padding: 0 !important;
+}
+
+.monthCellInner {
+  width: 100%;
+  height: 100%;
+  min-height: 2.5rem;
+}
+
+.activeMonth {
+  background-color: var(--color-primary-500);
+  /* Optional: pattern for gantt */
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(255,255,255,0.1) 10px,
+    rgba(255,255,255,0.1) 20px
+  );
+}
+
+@media (max-width: 768px) {
+  .row2 {
+    grid-template-columns: 1fr;
+  }
+  .actividadesHeader {
+    display: none;
+  }
+  .actividadRow {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 1rem;
+    background-color: var(--bg-body);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color);
+  }
+  .deleteBtn {
+    justify-self: end;
+  }
+}
