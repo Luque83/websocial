@@ -6,6 +6,7 @@ import { Target, Calendar, Wrench, FolderOpen, FolderKanban } from 'lucide-react
 import styles from './page.module.css';
 import { getProjectsWithStats, getDashboardStats } from '@/app/actions/projects';
 import { CreateProjectForm } from './CreateProjectForm';
+import { CreateAIProjectModal } from './CreateAIProjectModal';
 import { getDashboardTools } from '@/config/tools.registry';
 import { DeleteProjectButton } from './DeleteProjectButton';
 
@@ -120,7 +121,15 @@ export default async function DashboardPage() {
           
           <div className={styles.formContainer}>
             <Card padding="lg">
-              <h3 className={styles.formTitle}>Crear nuevo proyecto</h3>
+              <h3 className={styles.formTitle} style={{ marginBottom: '1rem' }}>Formular Proyecto</h3>
+              <CreateAIProjectModal />
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0', color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+                <span>o crear en blanco</span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+              </div>
+
               <CreateProjectForm />
             </Card>
           </div>
