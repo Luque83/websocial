@@ -7,10 +7,28 @@ import { Menu, X } from 'lucide-react';
 import { mainNavigation } from '@/config/navigation';
 import styles from './Header.module.css';
 
+import { createClient } from '@/lib/supabase/client';
+
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setIsLoggedIn(Boolean(data?.user));
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(Boolean(session?.user));
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -58,9 +76,15 @@ export function Header() {
         </nav>
 
         <div className={styles.actions}>
-          <Link href="/login" className={styles.ctaButton}>
-            Acceder
-          </Link>
+          {isLoggedIn ? (
+            <Link href="/dashboard" className={styles.ctaButton}>
+              Mi Dashboard
+            </Link>
+          ) : (
+            <Link href="/login" className={styles.ctaButton}>
+              Acceder
+            </Link>
+          )}
           <button 
             className={styles.mobileMenuButton}
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -90,13 +114,23 @@ export function Header() {
             })}
           </nav>
           <div className={styles.mobileActions}>
-            <Link 
-              href="/login" 
-              className={styles.mobileCtaButton}
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Acceder
-            </Link>
+            {isLoggedIn ? (
+              <Link 
+                href="/dashboard" 
+                className={styles.mobileCtaButton}
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Mi Dashboard
+              </Link>
+            ) : (
+              <Link 
+                href="/login" 
+                className={styles.mobileCtaButton}
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Acceder
+              </Link>
+            )}
           </div>
         </div>
       </div>
