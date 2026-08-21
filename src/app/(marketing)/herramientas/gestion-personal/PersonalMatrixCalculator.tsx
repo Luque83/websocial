@@ -553,7 +553,7 @@ export function PersonalMatrixCalculator({
                     </button>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 90px 120px 36px', gap: '0.75rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                  <div className={styles.allocationsTableHead}>
                     <span>Proyecto Real / Subvención</span>
                     <span>Horas/sem</span>
                     <span>Meses</span>

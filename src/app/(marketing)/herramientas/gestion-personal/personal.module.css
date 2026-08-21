@@ -1,4 +1,4 @@
-﻿.container {
+.container {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -208,6 +208,19 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.allocationsTableHead {
+  display: grid;
+  grid-template-columns: 2fr 100px 90px 120px 36px;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  padding: 0 0.25rem;
 }
 
 .allocationRow {
@@ -428,7 +441,23 @@
   .row4, .row3 {
     grid-template-columns: 1fr;
   }
+  .allocationsTableHead {
+    display: none;
+  }
   .allocationRow {
     grid-template-columns: 1fr;
+    gap: 0.5rem;
+    background: white;
+    padding: 0.85rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+  }
+  .workerHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .workerKpis {
+    width: 100%;
+    justify-content: space-between;
   }
 }

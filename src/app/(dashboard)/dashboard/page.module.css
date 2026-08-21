@@ -1,4 +1,4 @@
-﻿.page {
+.page {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -132,7 +132,7 @@
 
 .projectsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--space-4);
 }
 
@@ -141,13 +141,15 @@
   flex-direction: column;
   gap: var(--space-3);
   height: 100%;
+  word-break: break-word;
 }
 
 .projectName {
   font-size: 1.125rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+  word-break: break-word;
 }
 
 .projectDesc {
@@ -156,6 +158,7 @@
   line-height: 1.5;
   margin: 0;
   flex-grow: 1;
+  word-break: break-word;
 }
 
 .projectMeta {
@@ -165,11 +168,12 @@
   color: var(--text-muted);
   font-size: 0.75rem;
   margin-top: auto;
+  flex-wrap: wrap;
 }
 
 .formTitle {
   font-size: 1.125rem;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: var(--space-4);
   color: var(--text-primary);
 }
@@ -187,28 +191,29 @@
 }
 
 .label {
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.8125rem;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
 .input,
 .textarea {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: 0.65rem 0.85rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background-color: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
 }
 
 .input:focus,
 .textarea:focus {
   outline: none;
   border-color: var(--color-primary-500);
-  box-shadow: 0 0 0 2px var(--color-primary-100);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .textarea {
@@ -231,7 +236,7 @@
 
 .progressFill {
   height: 100%;
-  background-color: var(--color-primary-500);
+  background-color: var(--color-primary-600);
   border-radius: var(--radius-full);
   transition: width 0.3s ease;
 }
@@ -243,22 +248,24 @@
 }
 
 .statusBadge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 2px 8px;
   border-radius: var(--radius-full);
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 700;
   margin-bottom: var(--space-2);
 }
 
 .statusActive {
-  background-color: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background-color: #eff6ff;
+  color: #1d4ed8;
 }
 
 .statusEmpty {
-  background-color: var(--color-neutral-100);
-  color: var(--text-muted);
+  background-color: #f1f5f9;
+  color: #64748b;
 }
 
 .projectHeader {
@@ -274,16 +281,17 @@
   justify-content: center;
   background: transparent;
   border: none;
-  color: var(--color-error-500);
+  color: var(--text-muted);
   padding: var(--space-1);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
   flex-shrink: 0;
 }
 
 .deleteBtn:hover:not(:disabled) {
-  background-color: var(--color-error-50);
+  background-color: #fee2e2;
+  color: #dc2626;
 }
 
 .deleteBtn:disabled {
