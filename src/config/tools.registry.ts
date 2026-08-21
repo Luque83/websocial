@@ -60,9 +60,9 @@ export const TOOLS_REGISTRY: ToolRegistryEntry[] = [
     description: 'Diseña y monitoriza los indicadores de impacto social de tu intervención.',
     iconName: 'BarChart2',
     category: 'gestion',
-    status: 'coming-soon',
+    status: 'available',
     publicHref: '/herramientas/indicadores-impacto',
-    dashboardEnabled: false,
+    dashboardEnabled: true,
   },
   {
     slug: 'cronograma',
