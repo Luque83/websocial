@@ -1,0 +1,29 @@
+.fadeIn {
+  opacity: 0;
+  transition-property: opacity, transform;
+  transition-duration: 700ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+/* Initial States */
+.up { transform: translateY(30px); }
+.down { transform: translateY(-30px); }
+.left { transform: translateX(30px); }
+.right { transform: translateX(-30px); }
+.none { transform: none; }
+
+/* Visible State */
+.visible {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* Disable animations for users preferring reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .fadeIn {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,0 +1,86 @@
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+}
+
+h1 {
+  font-size: clamp(2.25rem, 4vw + 0.5rem, 3.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.028em;
+}
+
+h2 {
+  font-size: clamp(1.75rem, 2.5vw + 0.5rem, 2.375rem);
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.022em;
+}
+
+h3 {
+  font-size: clamp(1.35rem, 1.5vw + 0.5rem, 1.75rem);
+  font-weight: 600;
+  line-height: 1.30;
+  letter-spacing: -0.015em;
+}
+
+h4 {
+  font-size: clamp(1.15rem, 1vw + 0.35rem, 1.35rem);
+  font-weight: 600;
+  line-height: 1.38;
+  letter-spacing: -0.010em;
+}
+
+h5 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.50;
+  letter-spacing: 0.01em;
+}
+
+.text-display {
+  font-size: clamp(2.75rem, 5.5vw, 4.25rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.text-lead {
+  font-size: clamp(1.125rem, 0.5vw + 1rem, 1.25rem);
+  font-weight: 400;
+  line-height: 1.62;
+}
+
+.text-body {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.60;
+}
+
+.text-small {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+}
+
+.text-micro {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.40;
+  letter-spacing: 0.02em;
+}
+
+.text-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.20;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

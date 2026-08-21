@@ -1,0 +1,25 @@
+export const siteConfig = {
+  name: 'WebSocial',
+  description: 'Plataforma profesional para el Tercer Sector. Herramientas, recursos y soluciones para trabajadores sociales, educadores sociales y profesionales de la intervención social.',
+  url: process.env.NEXT_PUBLIC_SITE_URL || 'https://websocial.es',
+  locale: 'es_ES',
+  language: 'es',
+  creator: 'WebSocial',
+  keywords: [
+    'trabajo social',
+    'tercer sector',
+    'ONG',
+    'herramientas sociales',
+    'educación social',
+    'proyectos sociales',
+    'subvenciones',
+    'intervención social',
+    'marco lógico',
+    'gestión de proyectos sociales',
+  ],
+  social: {
+    twitter: '',
+    linkedin: '',
+    email: 'contacto@websocial.es',
+  },
+} as const;

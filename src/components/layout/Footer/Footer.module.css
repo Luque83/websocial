@@ -1,0 +1,129 @@
+.footer {
+  background-color: var(--color-primary-900);
+  color: var(--text-inverse);
+  padding: var(--section-py) 0 var(--space-8);
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container-xl);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding: 0 var(--space-8);
+  }
+}
+
+.topSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+@media (min-width: 1024px) {
+  .topSection {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+.brandColumn {
+  max-width: 320px;
+}
+
+.logo {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.25rem;
+  text-decoration: none;
+  display: inline-block;
+  margin-bottom: var(--space-2);
+}
+
+.tagline {
+  color: var(--color-accent-400);
+  font-size: 0.875rem;
+  margin-bottom: var(--space-4);
+}
+
+.description {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.navGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .navGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .navGrid {
+    grid-template-columns: repeat(4, 1fr);
+    flex: 1;
+    margin-left: var(--space-12);
+  }
+}
+
+.navColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.columnTitle {
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: var(--space-4);
+}
+
+.linkList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.link {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9375rem;
+  line-height: 2.2;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.link:hover {
+  color: #ffffff;
+}
+
+.bottomBar {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: var(--space-12);
+  padding-top: var(--space-6);
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .bottomBar {
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+}

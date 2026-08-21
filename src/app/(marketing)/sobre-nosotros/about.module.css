@@ -1,0 +1,137 @@
+.main {
+}
+
+.hero {
+  background: var(--primary-50);
+  padding: var(--space-16) 0;
+  text-align: center;
+  border-bottom: 1px solid var(--primary-100);
+}
+
+.heroContent {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.heroTitle {
+  font-size: var(--font-3xl);
+  font-weight: 700;
+  color: var(--primary-900);
+  margin-bottom: var(--space-4);
+  line-height: 1.2;
+}
+
+.heroSubtitle {
+  font-size: var(--font-lg);
+  color: var(--primary-700);
+  line-height: 1.6;
+}
+
+@media (min-width: 768px) {
+  .heroTitle {
+    font-size: var(--font-4xl);
+  }
+  .heroSubtitle {
+    font-size: var(--font-xl);
+  }
+}
+
+.valuesSection {
+  padding: var(--space-12) 0;
+}
+
+.valuesGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+}
+
+@media (min-width: 768px) {
+  .valuesGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.valueCard {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-8);
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.iconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: var(--primary-100);
+  color: var(--primary-600);
+  margin-bottom: var(--space-4);
+}
+
+.valueTitle {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.valueDescription {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.visionSection {
+  padding: var(--space-12) 0;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.visionContent {
+  max-width: 700px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.visionContent h2 {
+  font-size: var(--font-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-6);
+}
+
+.visionContent p {
+  font-size: var(--font-lg);
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+.ctaSection {
+  padding: var(--space-16) 0;
+  text-align: center;
+}
+
+.ctaContent {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.ctaContent h2 {
+  font-size: var(--font-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+}
+
+.ctaContent p {
+  color: var(--text-secondary);
+  font-size: var(--font-lg);
+  margin-bottom: var(--space-8);
+}
