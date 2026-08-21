@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, ArrowRight, ArrowLeft } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
+import { saveToolData } from '@/app/actions/tools';
 import styles from './marco-logico.module.css';
 
 interface Activity {
@@ -46,8 +47,14 @@ interface MarcoLogico {
 
 const generateId = () => Date.now().toString() + Math.random().toString(36).substring(2, 9);
 
-export function MarcoLogicoGenerator() {
+interface MarcoLogicoGeneratorProps {
+  initialData?: Partial<MarcoLogico>;
+  projectId?: string;
+}
+
+export function MarcoLogicoGenerator({ initialData, projectId }: MarcoLogicoGeneratorProps) {
   const [step, setStep] = useState(1);
+  const [isSaving, setIsSaving] = useState(false);
   const [ml, setMl] = useState<MarcoLogico>({
     projectName: '',
     finDescription: '',
@@ -72,11 +79,20 @@ export function MarcoLogicoGenerator() {
             indicator: '',
             source: '',
             assumption: '',
-            activities: [],
+            activities: [
+              {
+                id: generateId(),
+                description: '',
+                resources: '',
+                cost: '',
+                assumption: ''
+              }
+            ]
           }
-        ],
+        ]
       }
-    ]
+    ],
+    ...initialData
   });
 
   const nextStep = () => setStep(s => Math.min(s + 1, 4));
@@ -367,9 +383,26 @@ ${res.activities.map((act, aIdx) => `
         ) : (
           <div style={{ display: 'flex', gap: '1rem' }}>
             <button className={styles.btnSecondary} onClick={() => setStep(1)}>Editar Formulario</button>
-            <button className={styles.btnPrimary} onClick={() => alert('Próximamente podrás guardar esta matriz en tus proyectos.')}>
-              💾 Guardar en Proyecto (Próximamente)
-            </button>
+            {projectId && (
+              <button 
+                className={styles.btnPrimary} 
+                onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    await saveToolData(projectId, 'marco-logico', ml as unknown as any);
+                    alert('Guardado con éxito');
+                  } catch (error) {
+                    console.error(error);
+                    alert('Error al guardar');
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Guardando...' : '💾 Guardar en Proyecto'}
+              </button>
+            )}
           </div>
         )}
       </div>

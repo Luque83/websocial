@@ -27,7 +27,7 @@ export async function getProjects() {
   return projects;
 }
 
-export async function createProject(prevState: any, formData: FormData) {
+export async function createProject(prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();

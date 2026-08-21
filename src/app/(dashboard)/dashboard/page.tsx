@@ -1,8 +1,8 @@
 import React from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Plus, BarChart2, Users, Target, FolderKanban, Calendar } from 'lucide-react';
+import { BarChart2, Users, Target, FolderKanban, Calendar } from 'lucide-react';
 import styles from './page.module.css';
 import { getProjects } from '@/app/actions/projects';
 import { CreateProjectForm } from './CreateProjectForm';
@@ -68,16 +68,18 @@ export default async function DashboardPage() {
             {projects.length > 0 ? (
               <div className={styles.projectsGrid}>
                 {projects.map((project) => (
-                  <Card key={project.id} className={styles.projectCard} padding="md">
-                    <h3 className={styles.projectName}>{project.name}</h3>
-                    {project.description && (
-                      <p className={styles.projectDesc}>{project.description}</p>
-                    )}
-                    <div className={styles.projectMeta}>
-                      <Calendar size={14} />
-                      <span>{new Date(project.created_at).toLocaleDateString('es-ES')}</span>
-                    </div>
-                  </Card>
+                  <Link href={`/dashboard/proyectos/${project.id}`} key={project.id} style={{ textDecoration: 'none' }}>
+                    <Card className={styles.projectCard} padding="md">
+                      <h3 className={styles.projectName}>{project.name}</h3>
+                      {project.description && (
+                        <p className={styles.projectDesc}>{project.description}</p>
+                      )}
+                      <div className={styles.projectMeta}>
+                        <Calendar size={14} />
+                        <span>{new Date(project.created_at).toLocaleDateString('es-ES')}</span>
+                      </div>
+                    </Card>
+                  </Link>
                 ))}
               </div>
             ) : (
