@@ -74,6 +74,16 @@ export const TOOLS_REGISTRY: ToolRegistryEntry[] = [
     publicHref: '/herramientas/cronograma',
     dashboardEnabled: true,
   },
+  {
+    slug: 'calculadora-bajas',
+    name: 'Calculadora de Bajas e IT',
+    description: 'Calcula los tramos de incapacidad temporal y el importe exacto de personal y sustitución imputable a subvenciones.',
+    iconName: 'ShieldAlert',
+    category: 'calculadoras',
+    status: 'available',
+    publicHref: '/herramientas/calculadora-bajas',
+    dashboardEnabled: true,
+  },
 ];
 
 export const getAvailableTools = () =>

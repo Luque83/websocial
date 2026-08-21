@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, Target, Calculator, Users, FileText, BarChart2, Calendar, CheckCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Target, Calculator, Users, FileText, BarChart2, Calendar, CheckCircle, ShieldAlert } from 'lucide-react';
 import { getDashboardTools } from '@/config/tools.registry';
 import styles from './page.module.css';
 
@@ -15,7 +15,14 @@ const ICON_MAP: Record<string, React.ElementType> = {
   FileText,
   BarChart2,
   Calendar,
+  ShieldAlert,
 };
+
+interface ProjectToolRow {
+  tool_slug: string;
+  updated_at: string;
+  data?: Record<string, unknown>;
+}
 
 export default async function ProjectPage({
   params,
@@ -47,7 +54,7 @@ export default async function ProjectPage({
     .eq('project_id', id);
 
   const toolsDataMap = new Map(
-    (projectTools || []).map((pt: any) => [pt.tool_slug, pt])
+    ((projectTools || []) as ProjectToolRow[]).map(pt => [pt.tool_slug, pt])
   );
 
   const dashboardTools = getDashboardTools();
@@ -59,7 +66,8 @@ export default async function ProjectPage({
   if (costesTool?.data) {
     const d = costesTool.data;
     if (Array.isArray(d.partidas)) {
-      const direct = d.partidas.reduce((acc: number, p: any) => acc + (Number(p.monthlyAmount) * Number(p.months || 1)), 0);
+      const partidas = d.partidas as Array<Record<string, unknown>>;
+      const direct = partidas.reduce((acc: number, p) => acc + (Number(p.monthlyAmount || 0) * Number(p.months || 1)), 0);
       indirectPct = Number(d.indirectPct) || 0;
       totalCost = direct + (direct * indirectPct / 100);
     }
@@ -80,13 +88,14 @@ export default async function ProjectPage({
   if (indTool?.data) {
     const d = indTool.data;
     if (Array.isArray(d.indicadores)) {
-      const validInds = d.indicadores.filter((i: any) => i.name && i.name.trim());
+      const indicadores = d.indicadores as Array<Record<string, unknown>>;
+      const validInds = indicadores.filter(i => typeof i.name === 'string' && i.name.trim());
       indicatorsCount = validInds.length;
       if (indicatorsCount > 0) {
         let totalPct = 0;
-        validInds.forEach((ind: any) => {
-          const range = Number(ind.target) - Number(ind.baseline);
-          const progress = Number(ind.current) - Number(ind.baseline);
+        validInds.forEach(ind => {
+          const range = Number(ind.target || 0) - Number(ind.baseline || 0);
+          const progress = Number(ind.current || 0) - Number(ind.baseline || 0);
           let pct = range === 0 ? 0 : (progress / range) * 100;
           if (pct < 0) pct = 0;
           if (pct > 100) pct = 100;

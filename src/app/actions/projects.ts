@@ -20,7 +20,7 @@ export async function getProjects() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error al obtener proyectos:', error);
+    console.error('Error al obtener proyectos:', JSON.stringify(error), error.message, error.details);
     return [];
   }
 

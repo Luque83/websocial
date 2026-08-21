@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useId } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -9,9 +9,13 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
 import styles from './indicadores.module.css';
 
+type IndicadorType = 'cuantitativo' | 'porcentaje' | 'cualitativo';
+
 interface Indicador {
   id: string;
   name: string;
+  type: IndicadorType;
+  fuenteVerificacion: string;
   baseline: number;
   target: number;
   current: number;
@@ -31,38 +35,51 @@ interface IndicadoresGeneratorProps {
 
 interface MLNode {
   indicator?: string;
+  source?: string;
   results?: MLNode[];
 }
 
 interface MLRoot {
   finIndicator?: string;
+  finSource?: string;
   propositoIndicator?: string;
+  propositoSource?: string;
   objectives?: MLNode[];
 }
 
-function extractMLIndicators(data: unknown): string[] {
+interface ExtractedMLIndicator {
+  name: string;
+  source: string;
+}
+
+function extractMLIndicators(data: unknown): ExtractedMLIndicator[] {
   if (!data || typeof data !== 'object') return [];
   const ml = data as MLRoot;
-  const rawTexts: string[] = [];
+  const items: ExtractedMLIndicator[] = [];
   
-  if (typeof ml.finIndicator === 'string') rawTexts.push(ml.finIndicator);
-  if (typeof ml.propositoIndicator === 'string') rawTexts.push(ml.propositoIndicator);
+  if (typeof ml.finIndicator === 'string' && ml.finIndicator.trim()) {
+    items.push({ name: ml.finIndicator.trim(), source: ml.finSource || 'Memorias e informes' });
+  }
+  if (typeof ml.propositoIndicator === 'string' && ml.propositoIndicator.trim()) {
+    items.push({ name: ml.propositoIndicator.trim(), source: ml.propositoSource || 'Informes de seguimiento' });
+  }
   
   if (Array.isArray(ml.objectives)) {
     ml.objectives.forEach(obj => {
-      if (typeof obj.indicator === 'string') rawTexts.push(obj.indicator);
+      if (typeof obj.indicator === 'string' && obj.indicator.trim()) {
+        items.push({ name: obj.indicator.trim(), source: obj.source || 'Registros de intervención' });
+      }
       if (Array.isArray(obj.results)) {
         obj.results.forEach(res => {
-          if (typeof res.indicator === 'string') rawTexts.push(res.indicator);
+          if (typeof res.indicator === 'string' && res.indicator.trim()) {
+            items.push({ name: res.indicator.trim(), source: res.source || 'Listados de asistencia' });
+          }
         });
       }
     });
   }
   
-  return rawTexts
-    .flatMap(text => text.split('\n'))
-    .map(line => line.replace(/^[\s\-*•]+/, '').trim())
-    .filter(line => line.length > 5);
+  return items;
 }
 
 const parseInit = (data: unknown): IndicadoresData =>
@@ -79,22 +96,54 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
   const mlIndicatorsExtracted = React.useMemo(() => extractMLIndicators(mlData), [mlData]);
   
   const [indicadores, setIndicadores] = useState<Indicador[]>(() => {
-    if (init.indicadores && init.indicadores.length > 0) return init.indicadores;
+    if (init.indicadores && init.indicadores.length > 0) {
+      return init.indicadores.map(i => ({
+        ...i,
+        type: i.type || 'cuantitativo',
+        fuenteVerificacion: i.fuenteVerificacion || ''
+      }));
+    }
     
     if (mlIndicatorsExtracted.length > 0) {
       return mlIndicatorsExtracted.map((ind, idx) => ({
         id: Date.now().toString() + idx,
-        name: ind,
+        name: ind.name,
+        type: 'cuantitativo' as IndicadorType,
+        fuenteVerificacion: ind.source,
         baseline: 0,
-        target: 100,
+        target: 50,
         current: 0
       }));
     }
     
     return [
-      { id: '1', name: 'Número de personas atendidas', baseline: 0, target: 50, current: 20 },
-      { id: '2', name: 'Talleres realizados', baseline: 0, target: 10, current: 4 },
-      { id: '3', name: 'Porcentaje de inserción laboral (%)', baseline: 0, target: 30, current: 15 },
+      { 
+        id: '1', 
+        name: 'Personas usuarias atendidas', 
+        type: 'cuantitativo', 
+        fuenteVerificacion: 'Fichas de acogida y registro de participantes', 
+        baseline: 0, 
+        target: 50, 
+        current: 28 
+      },
+      { 
+        id: '2', 
+        name: 'Tasa de inserción sociolaboral', 
+        type: 'porcentaje', 
+        fuenteVerificacion: 'Contratos laborales e informes de seguimiento', 
+        baseline: 0, 
+        target: 40, 
+        current: 25 
+      },
+      { 
+        id: '3', 
+        name: 'Guía de recursos de empleo elaborada', 
+        type: 'cualitativo', 
+        fuenteVerificacion: 'Ejemplar en PDF y registro de entrega', 
+        baseline: 0, 
+        target: 1, 
+        current: 1 
+      },
     ];
   });
   
@@ -104,12 +153,14 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
     let addedCount = 0;
     const newInds = [...indicadores];
     
-    mlIndicatorsExtracted.forEach((indName, idx) => {
-      const exists = newInds.some(i => i.name.toLowerCase().trim() === indName.toLowerCase().trim());
-      if (!exists && indName.trim()) {
+    mlIndicatorsExtracted.forEach((mlInd, idx) => {
+      const exists = newInds.some(i => i.name.toLowerCase().trim() === mlInd.name.toLowerCase().trim());
+      if (!exists && mlInd.name.trim()) {
         newInds.push({
           id: Date.now().toString() + 'sync' + idx,
-          name: indName,
+          name: mlInd.name,
+          type: 'cuantitativo',
+          fuenteVerificacion: mlInd.source,
           baseline: 0,
           target: 100,
           current: 0
@@ -130,6 +181,8 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
     setIndicadores(prev => [...prev, {
       id: Date.now().toString(),
       name: '',
+      type: 'cuantitativo',
+      fuenteVerificacion: '',
       baseline: 0,
       target: 100,
       current: 0
@@ -151,9 +204,9 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
     try {
       const payload = { projectName, indicadores };
       await saveToolData(projectId, 'indicadores-impacto', payload);
-      showToast('Sistema de indicadores guardado', 'success');
+      showToast('Sistema de indicadores guardado con éxito', 'success');
     } catch {
-      showToast('Error al guardar', 'error');
+      showToast('Error al guardar los indicadores', 'error');
     }
     setIsSaving(false);
   };
@@ -177,41 +230,59 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
         </div>
       </div>
 
-      <div className={styles.sectionHeader}>Lista de Indicadores</div>
+      <div className={styles.sectionHeader}>Sistema de Indicadores y Fuentes de Verificación</div>
       <div className={styles.indicadoresHeader}>
+        <span>Tipo</span>
         <span>Indicador / Métrica</span>
-        <span>Valor Base</span>
-        <span>Valor Meta</span>
-        <span>Valor Actual</span>
+        <span>Fuente de verificación</span>
+        <span>Base</span>
+        <span>Meta</span>
+        <span>Actual</span>
         <span></span>
       </div>
       {indicadores.map(ind => (
         <div key={ind.id} className={styles.indicadorRow}>
+          <select
+            className={styles.input}
+            value={ind.type}
+            onChange={e => updateIndicador(ind.id, 'type', e.target.value as IndicadorType)}
+          >
+            <option value="cuantitativo">Nº Cantidad</option>
+            <option value="porcentaje">% Porcentaje</option>
+            <option value="cualitativo">Hito (Sí/No)</option>
+          </select>
           <input
             type="text"
             className={styles.input}
             value={ind.name}
             onChange={e => updateIndicador(ind.id, 'name', e.target.value)}
-            placeholder="Ej: Número de talleres impartidos"
+            placeholder="Ej: Talleres realizados"
+          />
+          <input
+            type="text"
+            className={styles.input}
+            value={ind.fuenteVerificacion}
+            onChange={e => updateIndicador(ind.id, 'fuenteVerificacion', e.target.value)}
+            placeholder="Ej: Listados de asistencia"
           />
           <input
             type="number"
             className={styles.input}
-            value={ind.baseline === 0 && ind.target === 0 ? '' : ind.baseline}
+            value={ind.baseline}
             onChange={e => updateIndicador(ind.id, 'baseline', parseFloat(e.target.value) || 0)}
-            placeholder="Base"
+            placeholder="0"
           />
           <input
             type="number"
             className={styles.input}
-            value={ind.target === 0 && ind.baseline === 0 ? '' : ind.target}
+            value={ind.target}
             onChange={e => updateIndicador(ind.id, 'target', parseFloat(e.target.value) || 0)}
             placeholder="Meta"
           />
           <input
             type="number"
             className={styles.input}
-            value={ind.current === 0 && ind.baseline === 0 && ind.target === 0 ? '' : ind.current}
+            value={ind.current}
             onChange={e => updateIndicador(ind.id, 'current', parseFloat(e.target.value) || 0)}
             placeholder="Actual"
           />
@@ -220,7 +291,7 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
           </button>
         </div>
       ))}
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
         <button className={styles.addBtn} onClick={addIndicador}>
           <Plus size={16} />
           Añadir indicador
@@ -231,15 +302,15 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
             onClick={handleSyncML}
             style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
           >
-            Sincronizar del Marco Lógico
+            📋 Sincronizar del Marco Lógico
           </button>
         )}
       </div>
 
       <ResultPanel
-        title="Panel de Seguimiento y Evaluación"
+        title="Cuadro de Mando y Seguimiento de Impacto"
         isEmpty={isEmpty}
-        emptyMessage="Define tus indicadores arriba para visualizar el progreso del proyecto."
+        emptyMessage="Define tus indicadores y fuentes de verificación para visualizar el cuadro de mando."
       >
         <div id="indicadores-dashboard-target" className={styles.dashboardGrid}>
           {indicadores.filter(i => i.name.trim()).map(ind => {
@@ -248,15 +319,33 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
             let percent = range === 0 ? 0 : (progress / range) * 100;
             if (percent < 0) percent = 0;
             
-            // Determinamos el color de la barra
+            // Color de barra
             let barColor = 'var(--color-primary-500)';
-            if (percent >= 100) barColor = '#10b981'; // green
-            else if (percent > 0 && percent < 33) barColor = '#f59e0b'; // orange
+            if (percent >= 100) barColor = '#10b981';
+            else if (percent > 0 && percent < 33) barColor = '#f59e0b';
+
+            const unit = ind.type === 'porcentaje' ? '%' : '';
 
             return (
               <div key={ind.id} className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <h4 className={styles.cardTitle}>{ind.name}</h4>
+                  <div>
+                    <span style={{ 
+                      fontSize: '0.7rem', 
+                      textTransform: 'uppercase', 
+                      fontWeight: 700, 
+                      letterSpacing: '0.05em',
+                      color: 'var(--color-primary-600)',
+                      backgroundColor: 'var(--color-primary-50)',
+                      padding: '0.15rem 0.4rem',
+                      borderRadius: '4px',
+                      display: 'inline-block',
+                      marginBottom: '0.35rem'
+                    }}>
+                      {ind.type === 'porcentaje' ? 'Porcentual' : ind.type === 'cualitativo' ? 'Hito / Entregable' : 'Cuantitativo'}
+                    </span>
+                    <h4 className={styles.cardTitle}>{ind.name}</h4>
+                  </div>
                   <span className={styles.cardPercentage} style={{ color: percent >= 100 ? '#10b981' : undefined }}>
                     {Math.round(percent)}%
                   </span>
@@ -272,17 +361,29 @@ export function IndicadoresGenerator({ initialData, projectId, projectName: exte
                 <div className={styles.statsRow}>
                   <div className={styles.statItem}>
                     <span>Base</span>
-                    <span className={styles.statValue}>{ind.baseline}</span>
+                    <span className={styles.statValue}>{ind.baseline}{unit}</span>
                   </div>
                   <div className={styles.statItem} style={{ textAlign: 'center' }}>
                     <span>Actual</span>
-                    <span className={styles.statValue}>{ind.current}</span>
+                    <span className={styles.statValue}>{ind.current}{unit}</span>
                   </div>
                   <div className={styles.statItem} style={{ textAlign: 'right' }}>
                     <span>Meta</span>
-                    <span className={styles.statValue}>{ind.target}</span>
+                    <span className={styles.statValue}>{ind.target}{unit}</span>
                   </div>
                 </div>
+
+                {ind.fuenteVerificacion && (
+                  <div style={{ 
+                    fontSize: '0.75rem', 
+                    color: 'var(--text-secondary)', 
+                    borderTop: '1px dashed var(--border-color)', 
+                    paddingTop: '0.5rem',
+                    marginTop: '0.25rem'
+                  }}>
+                    📁 <strong>Verificación:</strong> {ind.fuenteVerificacion}
+                  </div>
+                )}
               </div>
             );
           })}

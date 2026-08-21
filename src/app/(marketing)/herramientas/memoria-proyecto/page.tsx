@@ -1,4 +1,4 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { MemoriaGenerator } from './MemoriaGenerator';
 import { getToolData } from '@/app/actions/tools';
@@ -19,10 +19,16 @@ export default async function MemoriaPage({
   let initialData = undefined;
   let projectName = undefined;
   let mlData = undefined;
+  let costesData = undefined;
+  let cronogramaData = undefined;
+  let indicadoresData = undefined;
 
   if (projectId) {
     initialData = await getToolData(projectId, 'memoria-proyecto');
     mlData = await getToolData(projectId, 'marco-logico');
+    costesData = await getToolData(projectId, 'costes-proyecto');
+    cronogramaData = (await getToolData(projectId, 'cronograma-actividades')) || (await getToolData(projectId, 'cronograma'));
+    indicadoresData = await getToolData(projectId, 'indicadores-impacto');
     
     const { createClient } = await import('@/lib/supabase/server');
     const supabase = await createClient();
@@ -33,14 +39,14 @@ export default async function MemoriaPage({
   return (
     <ToolLayout
       title="Generador de Memoria Narrativa"
-      description="Esta herramienta te guía en la redacción de la memoria técnica exigida en casi cualquier convocatoria de subvenciones. Combina texto libre con auto-completado inteligente."
+      description="Esta herramienta te guía en la redacción de la memoria técnica exigida en casi cualquier convocatoria de subvenciones. Combina texto libre con auto-completado integral de todas las herramientas."
       category="Generadores"
       tier="free"
       instructions={[
         'Rellena los bloques narrativos de Contexto, Destinatarios, etc.',
-        'Pulsa "Auto-completar" para importar tus Objetivos y Actividades directamente del Marco Lógico.',
-        'Revisa la vista previa del documento generado.',
-        'Exporta el resultado final a un PDF profesional listo para presentar.'
+        'Pulsa "Auto-completar" en cada apartado para sincronizar Objetivos, Actividades, Presupuesto, Cronograma e Indicadores.',
+        'Revisa la vista previa del documento continuo.',
+        'Exporta el resultado final a un PDF profesional listo para presentar a la administración o financiador.'
       ]}
     >
       <MemoriaGenerator 
@@ -48,6 +54,9 @@ export default async function MemoriaPage({
         projectId={projectId} 
         projectName={projectName} 
         mlData={mlData} 
+        costesData={costesData}
+        cronogramaData={cronogramaData}
+        indicadoresData={indicadoresData}
       />
     </ToolLayout>
   );

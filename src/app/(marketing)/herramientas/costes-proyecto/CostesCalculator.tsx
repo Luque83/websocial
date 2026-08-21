@@ -9,14 +9,25 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
 import styles from './costes.module.css';
 
-type PartidaCategory = 'personal' | 'material' | 'actividades' | 'comunicacion' | 'otros';
+type PartidaCategory = 
+  | 'personal' 
+  | 'material' 
+  | 'actividades' 
+  | 'comunicacion' 
+  | 'auditoria' 
+  | 'alquileres' 
+  | 'viajes' 
+  | 'otros';
 
 const PARTIDA_LABELS: Record<PartidaCategory, string> = {
-  personal: 'Personal',
-  material: 'Material y equipamiento',
-  actividades: 'Actividades y eventos',
-  comunicacion: 'Comunicación y difusión',
-  otros: 'Otros gastos directos',
+  personal: '1. Personal y equipo técnico',
+  material: '2. Material y equipamiento',
+  actividades: '3. Actividades y talleres con personas usuarias',
+  comunicacion: '4. Comunicación y difusión',
+  auditoria: '5. Auditoría y evaluación externa',
+  alquileres: '6. Alquileres y suministros directos',
+  viajes: '7. Dietas y desplazamientos técnicos',
+  otros: '8. Otros gastos directos',
 };
 
 interface PartidaEntry {
@@ -34,6 +45,7 @@ interface CostesData {
   projectName?: string;
   durationMonths?: number;
   indirectPct?: number;
+  aportacionPropia?: number;
   partidas?: PartidaEntry[];
 }
 
@@ -42,6 +54,7 @@ interface CostesCalculatorProps {
   projectId?: string;
   projectName?: string;
   mlData?: unknown;
+  prorrateoData?: unknown;
 }
 
 const parseInit = (data: unknown): CostesData =>
@@ -89,7 +102,55 @@ function extractMLActivities(data: unknown): MLActivity[] {
   return activities;
 }
 
-export function CostesCalculator({ initialData, projectId, projectName: externalProjectName, mlData }: CostesCalculatorProps) {
+interface ProrrateoItem {
+  workerRole?: string;
+  monthlyTotalCost?: number;
+  results?: Array<{
+    name: string;
+    monthlyTotal: number;
+  }>;
+}
+
+function extractProrrateoPersonnel(data: unknown, currentProjectName?: string): { description: string; monthlyAmount: number } | null {
+  if (!data || typeof data !== 'object') return null;
+  const p = data as Record<string, unknown>;
+  const role = typeof p.workerRole === 'string' && p.workerRole.trim() ? p.workerRole : 'Técnico de Proyecto (Prorrateo)';
+  
+  // Si hay summary y results
+  const summary = p.summary as ProrrateoItem | undefined;
+  if (summary && Array.isArray(summary.results)) {
+    const matched = summary.results.find(r => 
+      currentProjectName && r.name.toLowerCase().trim() === currentProjectName.toLowerCase().trim()
+    );
+    if (matched && matched.monthlyTotal > 0) {
+      return {
+        description: `${role} (${matched.name})`,
+        monthlyAmount: matched.monthlyTotal
+      };
+    }
+    if (summary.monthlyTotalCost && summary.monthlyTotalCost > 0) {
+      return {
+        description: role,
+        monthlyAmount: summary.monthlyTotalCost
+      };
+    }
+  }
+
+  // Fallback si solo tiene salary bruto
+  const salary = parseFloat(String(p.salary || '0')) || 0;
+  const ssPct = parseFloat(String(p.ssPct || '31.4')) || 31.4;
+  if (salary > 0) {
+    const totalCost = salary * (1 + ssPct / 100);
+    return {
+      description: role,
+      monthlyAmount: totalCost
+    };
+  }
+
+  return null;
+}
+
+export function CostesCalculator({ initialData, projectId, projectName: externalProjectName, mlData, prorrateoData }: CostesCalculatorProps) {
   const uid = useId();
   
   const init = parseInit(initialData);
@@ -100,8 +161,10 @@ export function CostesCalculator({ initialData, projectId, projectName: external
 
   const [durationMonths, setDurationMonths] = useState<number>(init.durationMonths || 12);
   const [indirectPct, setIndirectPct] = useState<number>(init.indirectPct !== undefined ? init.indirectPct : 10);
+  const [aportacionPropia, setAportacionPropia] = useState<number>(init.aportacionPropia || 0);
   
   const mlActivities = React.useMemo(() => extractMLActivities(mlData), [mlData]);
+  const prorrateoPersonnel = React.useMemo(() => extractProrrateoPersonnel(prorrateoData, projectName), [prorrateoData, projectName]);
   
   const [partidas, setPartidas] = useState<PartidaEntry[]>(() => {
     if (init.partidas && init.partidas.length > 0) return init.partidas;
@@ -119,8 +182,8 @@ export function CostesCalculator({ initialData, projectId, projectName: external
     
     // Por defecto
     return [
-      { id: '1', category: 'personal', description: 'Coordinador/a de proyecto (50% jornada)', monthlyAmount: 1200, months: 12 },
-      { id: '2', category: 'material', description: 'Material de oficina', monthlyAmount: 150, months: 1 },
+      { id: '1', category: 'personal', description: 'Coordinador/a de proyecto (Coste empresa)', monthlyAmount: 1650, months: 12 },
+      { id: '2', category: 'material', description: 'Material fungible y de oficina', monthlyAmount: 150, months: 1 },
     ];
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -151,6 +214,32 @@ export function CostesCalculator({ initialData, projectId, projectName: external
     }
   };
 
+  const handleSyncProrrateo = () => {
+    if (!prorrateoPersonnel) {
+      showToast('No se encontraron datos de personal en el Prorrateo', 'info');
+      return;
+    }
+
+    const newPartidas = [...partidas];
+    const exists = newPartidas.some(p => p.description.toLowerCase().includes(prorrateoPersonnel.description.toLowerCase()));
+
+    if (exists) {
+      showToast('El puesto de personal ya está en el presupuesto', 'info');
+      return;
+    }
+
+    newPartidas.unshift({
+      id: Date.now().toString() + 'prorrateo',
+      category: 'personal',
+      description: prorrateoPersonnel.description,
+      monthlyAmount: Math.round(prorrateoPersonnel.monthlyAmount * 100) / 100,
+      months: durationMonths
+    });
+
+    setPartidas(newPartidas);
+    showToast(`Personal importado: ${prorrateoPersonnel.description}`, 'success');
+  };
+
   const addPartida = () => {
     setPartidas(prev => [...prev, {
       id: Date.now().toString(),
@@ -171,7 +260,7 @@ export function CostesCalculator({ initialData, projectId, projectName: external
     if (!projectId) return;
     setIsSaving(true);
     try {
-      const payload = { projectName, durationMonths, indirectPct, partidas };
+      const payload = { projectName, durationMonths, indirectPct, aportacionPropia, partidas };
       await saveToolData(projectId, 'costes-proyecto', payload);
       showToast('Costes guardados con éxito', 'success');
     } catch {
@@ -183,6 +272,7 @@ export function CostesCalculator({ initialData, projectId, projectName: external
   const directTotal = partidas.reduce((acc, p) => acc + (p.monthlyAmount * p.months), 0);
   const indirectAmount = directTotal * indirectPct / 100;
   const grandTotal = directTotal + indirectAmount;
+  const subvencionSolicitada = Math.max(0, grandTotal - aportacionPropia);
 
   const byCategory = (Object.keys(PARTIDA_LABELS) as PartidaCategory[]).map(cat => ({
     category: cat,
@@ -287,43 +377,81 @@ export function CostesCalculator({ initialData, projectId, projectName: external
           </button>
         </div>
       ))}
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
         <button className={styles.addBtn} onClick={addPartida}>
           <Plus size={16} />
           Añadir partida
         </button>
         {mlActivities.length > 0 && (
           <button 
-            className={styles.addBtn} 
+            className={styles.syncBtn} 
             onClick={handleSyncML}
-            style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+            title="Importar actividades como partidas del presupuesto"
           >
-            Sincronizar Actividades (Marco Lógico)
+            📋 Sincronizar Actividades (Marco Lógico)
+          </button>
+        )}
+        {prorrateoPersonnel && (
+          <button 
+            className={styles.syncBtn} 
+            onClick={handleSyncProrrateo}
+            title="Importar coste imputado del trabajador"
+          >
+            👤 Importar Personal (Prorrateo)
           </button>
         )}
       </div>
 
-      <div className={styles.sectionHeader}>Costes indirectos</div>
-      <div className={styles.sliderGroup}>
-        <div className={styles.sliderHeader}>
-          <label htmlFor={`${uid}-indirect`} className={styles.label}>Porcentaje de costes indirectos</label>
-          <span className={styles.sliderValue}>{indirectPct}%</span>
+      <div className={styles.sectionHeader}>Costes indirectos y Financiación</div>
+      <div className={styles.row2}>
+        <div className={styles.sliderGroup}>
+          <div className={styles.sliderHeader}>
+            <label htmlFor={`${uid}-indirect`} className={styles.label}>Costes indirectos (% gastos generales)</label>
+            <span className={styles.sliderValue}>{indirectPct}%</span>
+          </div>
+          <input
+            id={`${uid}-indirect`}
+            type="range"
+            min="0"
+            max="25"
+            step="1"
+            className={styles.slider}
+            value={indirectPct}
+            onChange={e => setIndirectPct(parseInt(e.target.value))}
+          />
+          {indirectPct > 15 ? (
+            <div className={styles.alertWarning}>
+              ⚠️ <strong>Tope habitual excedido:</strong> El {indirectPct}% supera el 10-15% fijado como límite en la mayoría de convocatorias públicas (IRPF, Ministerios, FSE). Revisa las bases.
+            </div>
+          ) : indirectPct > 10 ? (
+            <div className={styles.alertWarning}>
+              ℹ️ <strong>Nota de convocatoria:</strong> El {indirectPct}% está entre el 10% y el 15%. Algunas bases locales o autonómicas exigen un máximo estricto del 10%.
+            </div>
+          ) : (
+            <p className={styles.sliderHint}>Dentro de los límites habituales aceptados (hasta el 10%).</p>
+          )}
         </div>
-        <input
-          id={`${uid}-indirect`}
-          type="range"
-          min="0"
-          max="25"
-          step="1"
-          className={styles.slider}
-          value={indirectPct}
-          onChange={e => setIndirectPct(parseInt(e.target.value))}
-        />
-        <p className={styles.sliderHint}>Los costes indirectos cubren gastos generales de la entidad (alquiler, administración, etc.) imputables al proyecto.</p>
+
+        <div className={styles.formGroup}>
+          <label htmlFor={`${uid}-aportacion`} className={styles.label}>
+            Aportación propia / Cofinanciación (€)
+          </label>
+          <input
+            id={`${uid}-aportacion`}
+            type="number"
+            min="0"
+            step="0.01"
+            className={styles.input}
+            value={aportacionPropia || ''}
+            onChange={e => setAportacionPropia(parseFloat(e.target.value) || 0)}
+            placeholder="0 € (Fondos propios entidad)"
+          />
+          <span className={styles.sliderHint}>Importe que asume la entidad u otros financiadores privados.</span>
+        </div>
       </div>
 
       <ResultPanel
-        title="Presupuesto del proyecto"
+        title="Presupuesto y Plan Financiero del Proyecto"
         copyText={isEmpty ? undefined : copyText}
         isEmpty={isEmpty}
         emptyMessage="Añade partidas con importes para calcular el presupuesto."
@@ -338,10 +466,18 @@ export function CostesCalculator({ initialData, projectId, projectName: external
             <span className={styles.summaryValue}>{formatCurrency(indirectAmount)}</span>
           </div>
           <div className={`${styles.summaryItem} ${styles.summaryTotal}`}>
-            <span className={styles.summaryLabel}>Total presupuesto</span>
+            <span className={styles.summaryLabel}>Coste total del proyecto</span>
             <span className={styles.summaryValueLg}>{formatCurrency(grandTotal)}</span>
           </div>
         </div>
+
+        {aportacionPropia > 0 && (
+          <div className={styles.alertSuccess} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span><strong>Subvención solicitada al financiador:</strong> {formatCurrency(subvencionSolicitada)} ({((subvencionSolicitada / (grandTotal || 1)) * 100).toFixed(1)}%)</span>
+            <span><strong>Aportación propia:</strong> {formatCurrency(aportacionPropia)} ({((aportacionPropia / (grandTotal || 1)) * 100).toFixed(1)}%)</span>
+          </div>
+        )}
+
         {byCategory.length > 0 && (
           <div className={styles.tableWrapper}>
             <table className={styles.table}>

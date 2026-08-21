@@ -13,6 +13,9 @@ import {
   ClipboardCheck,
   FileCheck,
   ArrowRight,
+  ShieldAlert,
+  Target,
+  BarChart2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -25,12 +28,15 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   Calculator,
   FileText,
   BarChart3,
+  BarChart2,
   Briefcase,
   Users,
   BookOpen,
   Calendar,
   ClipboardCheck,
   FileCheck,
+  ShieldAlert,
+  Target,
 };
 
 export function ToolsCatalog({ initialTools }: { initialTools: ToolItem[] }) {

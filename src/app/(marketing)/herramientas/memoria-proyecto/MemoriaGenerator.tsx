@@ -16,7 +16,9 @@ interface MemoriaData {
   objetivos: string;
   metodologia: string;
   actividades: string;
+  cronograma: string;
   evaluacion: string;
+  presupuesto: string;
 }
 
 interface MemoriaGeneratorProps {
@@ -24,6 +26,9 @@ interface MemoriaGeneratorProps {
   projectId?: string;
   projectName?: string;
   mlData?: unknown;
+  costesData?: unknown;
+  cronogramaData?: unknown;
+  indicadoresData?: unknown;
 }
 
 interface MLNode {
@@ -47,7 +52,9 @@ const parseInit = (data: unknown): MemoriaData => {
     objetivos: typeof d.objetivos === 'string' ? d.objetivos : '',
     metodologia: typeof d.metodologia === 'string' ? d.metodologia : '',
     actividades: typeof d.actividades === 'string' ? d.actividades : '',
+    cronograma: typeof d.cronograma === 'string' ? d.cronograma : '',
     evaluacion: typeof d.evaluacion === 'string' ? d.evaluacion : '',
+    presupuesto: typeof d.presupuesto === 'string' ? d.presupuesto : '',
   };
 };
 
@@ -95,7 +102,78 @@ function formatMLActividades(data: unknown): string {
   return text.trim();
 }
 
-export function MemoriaGenerator({ initialData, projectId, projectName: externalProjectName, mlData }: MemoriaGeneratorProps) {
+function formatCronograma(data: unknown): string {
+  if (!data || typeof data !== 'object') return '';
+  const c = data as Record<string, unknown>;
+  let text = '';
+  if (c.durationMonths) {
+    text += `Duración estimada del proyecto: ${c.durationMonths} meses.\n\n`;
+  }
+  if (Array.isArray(c.activities) && c.activities.length > 0) {
+    text += `PLANIFICACIÓN TEMPORAL DE ACTIVIDADES:\n`;
+    c.activities.forEach((act: Record<string, unknown>) => {
+      if (act && typeof act.description === 'string' && act.description) {
+        const resp = act.responsible ? ` (Responsable: ${act.responsible})` : '';
+        text += `• Mes ${act.startMonth || 1} a Mes ${act.endMonth || 1}: ${act.description}${resp}\n`;
+      }
+    });
+  }
+  return text.trim();
+}
+
+function formatIndicadores(data: unknown): string {
+  if (!data || typeof data !== 'object') return '';
+  const indData = data as Record<string, unknown>;
+  let text = '';
+  if (Array.isArray(indData.indicadores) && indData.indicadores.length > 0) {
+    text += `SISTEMA DE INDICADORES DE SEGUIMIENTO E IMPACTO:\n\n`;
+    indData.indicadores.forEach((ind: Record<string, unknown>, idx: number) => {
+      if (ind && typeof ind.name === 'string' && ind.name) {
+        const source = ind.fuenteVerificacion ? ` [Verificación: ${ind.fuenteVerificacion}]` : '';
+        text += `${idx + 1}. ${ind.name}\n   - Valor Base: ${ind.baseline ?? 0} | Meta: ${ind.target ?? 0}${source}\n`;
+      }
+    });
+  }
+  return text.trim();
+}
+
+function formatCostes(data: unknown): string {
+  if (!data || typeof data !== 'object') return '';
+  const c = data as Record<string, unknown>;
+  let text = '';
+  
+  if (Array.isArray(c.partidas) && c.partidas.length > 0) {
+    const directTotal = c.partidas.reduce((acc: number, p: Record<string, unknown>) => acc + (Number(p.monthlyAmount || 0) * Number(p.months || 1)), 0);
+    const indirectPct = Number(c.indirectPct) || 0;
+    const indirectAmount = (directTotal * indirectPct) / 100;
+    const grandTotal = directTotal + indirectAmount;
+    const aportacion = Number(c.aportacionPropia) || 0;
+    const subvencion = Math.max(0, grandTotal - aportacion);
+
+    const fmt = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
+
+    text += `RESUMEN PRESUPUESTARIO Y PLAN DE FINANCIACIÓN:\n\n`;
+    text += `• Costes Directos de Ejecución: ${fmt(directTotal)}\n`;
+    text += `• Costes Indirectos / Gastos Generales (${indirectPct}%): ${fmt(indirectAmount)}\n`;
+    text += `• PRESUPUESTO TOTAL: ${fmt(grandTotal)}\n\n`;
+    
+    if (aportacion > 0) {
+      text += `Plan de Financiación:\n`;
+      text += `- Subvención solicitada: ${fmt(subvencion)} (${((subvencion / grandTotal) * 100).toFixed(1)}%)\n`;
+      text += `- Cofinanciación / Fondos propios: ${fmt(aportacion)} (${((aportacion / grandTotal) * 100).toFixed(1)}%)\n\n`;
+    }
+
+    text += `Principales Partidas:\n`;
+    c.partidas.slice(0, 8).forEach((p: Record<string, unknown>) => {
+      if (p.description) {
+        text += `- ${p.description}: ${fmt(Number(p.monthlyAmount || 0) * Number(p.months || 1))}\n`;
+      }
+    });
+  }
+  return text.trim();
+}
+
+export function MemoriaGenerator({ initialData, projectId, projectName: externalProjectName, mlData, costesData, cronogramaData, indicadoresData }: MemoriaGeneratorProps) {
   const uid = useId();
   const init = parseInit(initialData);
   const { toasts, showToast, removeToast } = useToast();
@@ -107,7 +185,9 @@ export function MemoriaGenerator({ initialData, projectId, projectName: external
     objetivos: init.objetivos,
     metodologia: init.metodologia,
     actividades: init.actividades,
-    evaluacion: init.evaluacion
+    cronograma: init.cronograma,
+    evaluacion: init.evaluacion,
+    presupuesto: init.presupuesto,
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -133,6 +213,36 @@ export function MemoriaGenerator({ initialData, projectId, projectName: external
       showToast('Actividades importadas del Marco Lógico', 'success');
     } else {
       showToast('No se encontraron actividades en el Marco Lógico', 'info');
+    }
+  };
+
+  const syncCronograma = () => {
+    const text = formatCronograma(cronogramaData);
+    if (text) {
+      updateField('cronograma', text);
+      showToast('Cronograma importado con éxito', 'success');
+    } else {
+      showToast('No se encontró cronograma guardado', 'info');
+    }
+  };
+
+  const syncIndicadores = () => {
+    const text = formatIndicadores(indicadoresData);
+    if (text) {
+      updateField('evaluacion', text);
+      showToast('Indicadores y fuentes de verificación importados', 'success');
+    } else {
+      showToast('No se encontraron indicadores guardados', 'info');
+    }
+  };
+
+  const syncCostes = () => {
+    const text = formatCostes(costesData);
+    if (text) {
+      updateField('presupuesto', text);
+      showToast('Presupuesto y financiación importados', 'success');
+    } else {
+      showToast('No se encontraron costes guardados', 'info');
     }
   };
 
@@ -192,7 +302,7 @@ export function MemoriaGenerator({ initialData, projectId, projectName: external
           <span>3. Objetivos del Proyecto</span>
           {!!mlData && (
             <button className={styles.syncBtn} onClick={syncObjetivos} title="Importar del Marco Lógico">
-              <Sparkles size={14} /> Auto-completar
+              <Sparkles size={14} /> Auto-completar desde Marco Lógico
             </button>
           )}
         </div>
@@ -219,7 +329,7 @@ export function MemoriaGenerator({ initialData, projectId, projectName: external
           <span>5. Actividades Principales</span>
           {!!mlData && (
             <button className={styles.syncBtn} onClick={syncActividades} title="Importar del Marco Lógico">
-              <Sparkles size={14} /> Auto-completar
+              <Sparkles size={14} /> Auto-completar desde Marco Lógico
             </button>
           )}
         </div>
@@ -232,12 +342,53 @@ export function MemoriaGenerator({ initialData, projectId, projectName: external
       </div>
 
       <div className={styles.formGroup}>
-        <label className={styles.label}>6. Sistema de Evaluación e Indicadores</label>
+        <div className={styles.label}>
+          <span>6. Calendario y Cronograma de Ejecución</span>
+          {!!cronogramaData && (
+            <button className={styles.syncBtn} onClick={syncCronograma} title="Importar del Cronograma">
+              <Sparkles size={14} /> Auto-completar desde Cronograma
+            </button>
+          )}
+        </div>
+        <textarea
+          className={styles.textarea}
+          value={memoria.cronograma}
+          onChange={e => updateField('cronograma', e.target.value)}
+          placeholder="Planificación temporal, hitos y fases..."
+        />
+      </div>
+
+      <div className={styles.formGroup}>
+        <div className={styles.label}>
+          <span>7. Sistema de Evaluación e Indicadores</span>
+          {!!indicadoresData && (
+            <button className={styles.syncBtn} onClick={syncIndicadores} title="Importar de Indicadores">
+              <Sparkles size={14} /> Auto-completar desde Indicadores
+            </button>
+          )}
+        </div>
         <textarea
           className={styles.textarea}
           value={memoria.evaluacion}
           onChange={e => updateField('evaluacion', e.target.value)}
           placeholder="¿Cómo se medirá el éxito del proyecto? Cita algunos de los indicadores principales y las fuentes de verificación..."
+        />
+      </div>
+
+      <div className={styles.formGroup}>
+        <div className={styles.label}>
+          <span>8. Presupuesto y Recursos Económicos</span>
+          {!!costesData && (
+            <button className={styles.syncBtn} onClick={syncCostes} title="Importar de Costes">
+              <Sparkles size={14} /> Auto-completar desde Presupuesto
+            </button>
+          )}
+        </div>
+        <textarea
+          className={styles.textarea}
+          value={memoria.presupuesto}
+          onChange={e => updateField('presupuesto', e.target.value)}
+          placeholder="Desglose presupuestario y justificación económica..."
         />
       </div>
 
@@ -284,11 +435,25 @@ export function MemoriaGenerator({ initialData, projectId, projectName: external
                 <div className={styles.docText}>{memoria.actividades}</div>
               </div>
             )}
+
+            {memoria.cronograma && (
+              <div className={styles.docSection}>
+                <h2 className={styles.docH2}>6. Calendario y Cronograma de Ejecución</h2>
+                <div className={styles.docText}>{memoria.cronograma}</div>
+              </div>
+            )}
             
             {memoria.evaluacion && (
               <div className={styles.docSection}>
-                <h2 className={styles.docH2}>6. Sistema de Evaluación</h2>
+                <h2 className={styles.docH2}>7. Sistema de Evaluación e Indicadores</h2>
                 <div className={styles.docText}>{memoria.evaluacion}</div>
+              </div>
+            )}
+
+            {memoria.presupuesto && (
+              <div className={styles.docSection}>
+                <h2 className={styles.docH2}>8. Presupuesto y Recursos Económicos</h2>
+                <div className={styles.docText}>{memoria.presupuesto}</div>
               </div>
             )}
           </div>

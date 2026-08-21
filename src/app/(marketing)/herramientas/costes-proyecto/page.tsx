@@ -18,10 +18,12 @@ export default async function CostesProyectoPage({
   let initialData = undefined;
   let projectName = undefined;
   let mlData = undefined;
+  let prorrateoData = undefined;
 
   if (projectId) {
     initialData = await getToolData(projectId, 'costes-proyecto');
     mlData = await getToolData(projectId, 'marco-logico');
+    prorrateoData = await getToolData(projectId, 'prorrateo-nominas');
     
     const { createClient } = await import('@/lib/supabase/server');
     const supabase = await createClient();
@@ -43,7 +45,13 @@ export default async function CostesProyectoPage({
         'Copia o imprime el presupuesto para incluirlo en tu solicitud.',
       ]}
     >
-      <CostesCalculator initialData={initialData} projectId={projectId} projectName={projectName} mlData={mlData} />
+      <CostesCalculator 
+        initialData={initialData} 
+        projectId={projectId} 
+        projectName={projectName} 
+        mlData={mlData} 
+        prorrateoData={prorrateoData}
+      />
     </ToolLayout>
   );
 }
