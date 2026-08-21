@@ -4,6 +4,8 @@ import React, { useState, useId } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
 import { saveToolData } from '@/app/actions/tools';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 import styles from './prorrateo.module.css';
 
 interface ProjectEntry {
@@ -35,6 +37,7 @@ export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalcula
   const uid = useId();
   
   const init = parseInit(initialData);
+  const { toasts, showToast, removeToast } = useToast();
 
   const [salary, setSalary] = useState<string>(init.salary || '');
   const [projects, setProjects] = useState<ProjectEntry[]>(init.projects || [
@@ -79,9 +82,9 @@ export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalcula
     try {
       const payload = { salary, projects };
       await saveToolData(projectId, 'prorrateo-nominas', payload);
-      alert('Guardado con éxito');
+      showToast('Prorrateo guardado con éxito', 'success');
     } catch {
-      alert('Error al guardar');
+      showToast('Error al guardar el prorrateo', 'error');
     }
     setIsSaving(false);
   };
@@ -223,6 +226,7 @@ export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalcula
           </div>
         )}
       </ResultPanel>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

@@ -2,16 +2,23 @@ import React from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/Card';
-import { BarChart2, Users, Target, FolderKanban, Calendar } from 'lucide-react';
+import { Target, Calendar, Wrench, FolderOpen, FolderKanban } from 'lucide-react';
 import styles from './page.module.css';
-import { getProjects } from '@/app/actions/projects';
+import { getProjectsWithStats, getDashboardStats } from '@/app/actions/projects';
 import { CreateProjectForm } from './CreateProjectForm';
+import { getDashboardTools } from '@/config/tools.registry';
+import { DeleteProjectButton } from './DeleteProjectButton';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const projects = await getProjects();
+  const [projects, stats] = await Promise.all([
+    getProjectsWithStats(),
+    getDashboardStats()
+  ]);
+
+  const totalTools = getDashboardTools().length;
 
   const greeting = user?.user_metadata?.full_name 
     ? `¡Hola, ${user.user_metadata.full_name.split(' ')[0]}!` 
@@ -32,28 +39,28 @@ export default async function DashboardPage() {
             <FolderKanban size={24} />
           </div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Proyectos activos</span>
-            <span className={styles.statValue}>{projects.length}</span>
+            <span className={styles.statLabel}>Proyectos totales</span>
+            <span className={styles.statValue}>{stats.totalProjects}</span>
           </div>
         </Card>
         
         <Card className={styles.statCard} padding="lg">
           <div className={styles.statIconWrapper} style={{ backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-700)' }}>
-            <Users size={24} />
+            <Wrench size={24} />
           </div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Colaboradores</span>
-            <span className={styles.statValue}>0</span>
+            <span className={styles.statLabel}>Herramientas usadas</span>
+            <span className={styles.statValue}>{stats.toolsUsed}</span>
           </div>
         </Card>
         
         <Card className={styles.statCard} padding="lg">
           <div className={styles.statIconWrapper} style={{ backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-700)' }}>
-            <BarChart2 size={24} />
+            <FolderOpen size={24} />
           </div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Impacto medido</span>
-            <span className={styles.statValue}>0%</span>
+            <span className={styles.statLabel}>Proyectos activos</span>
+            <span className={styles.statValue}>{stats.activeProjects}</span>
           </div>
         </Card>
       </section>
@@ -70,13 +77,31 @@ export default async function DashboardPage() {
                 {projects.map((project) => (
                   <Link href={`/dashboard/proyectos/${project.id}`} key={project.id} style={{ textDecoration: 'none' }}>
                     <Card className={styles.projectCard} padding="md">
-                      <h3 className={styles.projectName}>{project.name}</h3>
+                      <div className={styles.projectHeader}>
+                        <h3 className={styles.projectName}>{project.name}</h3>
+                        <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <DeleteProjectButton projectId={project.id} projectName={project.name} />
+                        </div>
+                      </div>
+                      
                       {project.description && (
                         <p className={styles.projectDesc}>{project.description}</p>
                       )}
-                      <div className={styles.projectMeta}>
-                        <Calendar size={14} />
-                        <span>{new Date(project.created_at).toLocaleDateString('es-ES')}</span>
+                      
+                      <div style={{ marginTop: 'auto' }}>
+                        <div className={styles.progressBar}>
+                          <div 
+                            className={styles.progressFill} 
+                            style={{ width: `${Math.min((project.toolsCount / totalTools) * 100, 100)}%` }}
+                          />
+                        </div>
+                        <div className={styles.toolsProgress}>
+                          {project.toolsCount} de {totalTools} herramientas
+                        </div>
+                        <div className={styles.projectMeta}>
+                          <Calendar size={14} />
+                          <span>{new Date(project.created_at).toLocaleDateString('es-ES')}</span>
+                        </div>
                       </div>
                     </Card>
                   </Link>

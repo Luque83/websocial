@@ -4,6 +4,8 @@ import React, { useState, useId } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
 import { saveToolData } from '@/app/actions/tools';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 import styles from './costes.module.css';
 
 type PartidaCategory = 'personal' | 'material' | 'actividades' | 'comunicacion' | 'otros';
@@ -46,6 +48,7 @@ export function CostesCalculator({ initialData, projectId }: CostesCalculatorPro
   const uid = useId();
   
   const init = parseInit(initialData);
+  const { toasts, showToast, removeToast } = useToast();
 
   const [projectName, setProjectName] = useState<string>(init.projectName || '');
   const [durationMonths, setDurationMonths] = useState<number>(init.durationMonths || 12);
@@ -78,9 +81,9 @@ export function CostesCalculator({ initialData, projectId }: CostesCalculatorPro
     try {
       const payload = { projectName, durationMonths, indirectPct, partidas };
       await saveToolData(projectId, 'costes-proyecto', payload);
-      alert('Guardado con éxito');
+      showToast('Costes guardados con éxito', 'success');
     } catch {
-      alert('Error al guardar');
+      showToast('Error al guardar los costes', 'error');
     }
     setIsSaving(false);
   };
@@ -297,6 +300,7 @@ export function CostesCalculator({ initialData, projectId }: CostesCalculatorPro
           </div>
         )}
       </ResultPanel>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

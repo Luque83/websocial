@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { Plus, Trash2, ArrowRight, ArrowLeft } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
 import { saveToolData } from '@/app/actions/tools';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 import styles from './marco-logico.module.css';
 
 interface Activity {
@@ -55,6 +57,7 @@ interface MarcoLogicoGeneratorProps {
 export function MarcoLogicoGenerator({ initialData, projectId }: MarcoLogicoGeneratorProps) {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const { toasts, showToast, removeToast } = useToast();
   const [ml, setMl] = useState<MarcoLogico>({
     projectName: '',
     finDescription: '',
@@ -390,10 +393,10 @@ ${res.activities.map((act, aIdx) => `
                   setIsSaving(true);
                   try {
                     await saveToolData(projectId, 'marco-logico', ml);
-                    alert('Guardado con éxito');
+                    showToast('Marco lógico guardado con éxito', 'success');
                   } catch (error) {
                     console.error(error);
-                    alert('Error al guardar');
+                    showToast('Error al guardar el marco lógico', 'error');
                   } finally {
                     setIsSaving(false);
                   }
@@ -406,6 +409,7 @@ ${res.activities.map((act, aIdx) => `
           </div>
         )}
       </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

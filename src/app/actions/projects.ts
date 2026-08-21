@@ -82,3 +82,56 @@ export async function deleteProject(projectId: string) {
 
   revalidatePath('/dashboard');
 }
+
+export async function getDashboardStats() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { totalProjects: 0, toolsUsed: 0, activeProjects: 0 };
+
+  // Proyectos del usuario
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('user_id', user.id);
+
+  const projectIds = (projects || []).map(p => p.id);
+  
+  if (projectIds.length === 0) return { totalProjects: 0, toolsUsed: 0, activeProjects: 0 };
+
+  // Herramientas usadas en total
+  const { count: toolsUsed } = await supabase
+    .from('project_tools')
+    .select('id', { count: 'exact' })
+    .in('project_id', projectIds);
+
+  // Proyectos con al menos 1 herramienta
+  const { data: activeToolData } = await supabase
+    .from('project_tools')
+    .select('project_id')
+    .in('project_id', projectIds);
+
+  const activeProjectIds = new Set((activeToolData || []).map(t => t.project_id));
+
+  return {
+    totalProjects: projectIds.length,
+    toolsUsed: toolsUsed || 0,
+    activeProjects: activeProjectIds.size,
+  };
+}
+
+export async function getProjectsWithStats() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('*, project_tools(tool_slug)')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false });
+
+  return (projects || []).map(p => ({
+    ...p,
+    toolsCount: (p.project_tools as { tool_slug: string }[] | null)?.length || 0,
+  }));
+}
