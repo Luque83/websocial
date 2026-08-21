@@ -1,37 +1,13 @@
 'use client';
 
 import React, { useState, useId } from 'react';
-import { Plus, Trash2, User, Briefcase, CheckCircle2, AlertTriangle, AlertCircle, FileSpreadsheet, Building2 } from 'lucide-react';
+import { Plus, Trash2, User, Briefcase, CheckCircle2, AlertTriangle, AlertCircle, FileSpreadsheet, Building2, PieChart, RefreshCw } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
-import { saveToolData } from '@/app/actions/tools';
+import { savePersonalMatrixAction, ProjectAllocation, Worker, PersonalMatrixData } from '@/app/actions/personal';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
 import styles from './personal.module.css';
-
-export interface ProjectAllocation {
-  id: string;
-  projectName: string;
-  weeklyHours: number;
-  months: number;
-}
-
-export interface Worker {
-  id: string;
-  name: string;
-  role: string;
-  category: string;
-  salaryMonthly: number;
-  pagas: number;
-  ssPct: number;
-  maxWeeklyHours: number;
-  allocations: ProjectAllocation[];
-}
-
-export interface PersonalMatrixData {
-  organizationName?: string;
-  workers?: Worker[];
-}
 
 interface PersonalMatrixCalculatorProps {
   initialData?: unknown;
@@ -40,13 +16,23 @@ interface PersonalMatrixCalculatorProps {
   availableProjects?: Array<{ id: string; name: string }>;
 }
 
+const PROJECT_COLORS = [
+  '#2563eb', // Blue
+  '#10b981', // Emerald
+  '#f59e0b', // Amber
+  '#8b5cf6', // Purple
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#64748b', // Slate
+];
+
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
 
 const formatPct = (pct: number) =>
   `${pct.toFixed(1).replace('.', ',')}%`;
 
-const parseInit = (data: unknown, currentProjectName?: string): PersonalMatrixData => {
+const parseInit = (data: unknown, currentProjectId?: string, currentProjectName?: string, availableProjects: Array<{ id: string; name: string }> = []): PersonalMatrixData => {
   const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
   const defaultWorkers: Worker[] = [
     {
@@ -59,9 +45,27 @@ const parseInit = (data: unknown, currentProjectName?: string): PersonalMatrixDa
       ssPct: 31.4,
       maxWeeklyHours: 37.5,
       allocations: [
-        { id: 'a1', projectName: currentProjectName || 'Proyecto Inserción IRPF', weeklyHours: 20, months: 12 },
-        { id: 'a2', projectName: 'Programa Familias Ayto', weeklyHours: 10, months: 12 },
-        { id: 'a3', projectName: 'Sede / Estructura General', weeklyHours: 7.5, months: 12 },
+        { 
+          id: 'a1', 
+          projectId: currentProjectId || availableProjects[0]?.id || 'p1', 
+          projectName: currentProjectName || availableProjects[0]?.name || 'Proyecto Inserción IRPF', 
+          weeklyHours: 20, 
+          months: 12 
+        },
+        { 
+          id: 'a2', 
+          projectId: availableProjects[1]?.id || 'p2', 
+          projectName: availableProjects[1]?.name || 'Programa Familias', 
+          weeklyHours: 10, 
+          months: 12 
+        },
+        { 
+          id: 'a3', 
+          projectId: 'sede', 
+          projectName: 'Sede / Estructura General', 
+          weeklyHours: 7.5, 
+          months: 12 
+        },
       ]
     },
     {
@@ -74,8 +78,20 @@ const parseInit = (data: unknown, currentProjectName?: string): PersonalMatrixDa
       ssPct: 31.4,
       maxWeeklyHours: 37.5,
       allocations: [
-        { id: 'a4', projectName: currentProjectName || 'Proyecto Inserción IRPF', weeklyHours: 25, months: 12 },
-        { id: 'a5', projectName: 'Taller Juventud FSE', weeklyHours: 12.5, months: 10 },
+        { 
+          id: 'a4', 
+          projectId: currentProjectId || availableProjects[0]?.id || 'p1', 
+          projectName: currentProjectName || availableProjects[0]?.name || 'Proyecto Inserción IRPF', 
+          weeklyHours: 25, 
+          months: 12 
+        },
+        { 
+          id: 'a5', 
+          projectId: availableProjects[1]?.id || 'p2', 
+          projectName: availableProjects[1]?.name || 'Taller Juventud FSE', 
+          weeklyHours: 12.5, 
+          months: 10 
+        },
       ]
     },
     {
@@ -88,9 +104,27 @@ const parseInit = (data: unknown, currentProjectName?: string): PersonalMatrixDa
       ssPct: 31.4,
       maxWeeklyHours: 37.5,
       allocations: [
-        { id: 'a6', projectName: currentProjectName || 'Proyecto Inserción IRPF', weeklyHours: 10, months: 12 },
-        { id: 'a7', projectName: 'Programa Familias Ayto', weeklyHours: 15, months: 12 },
-        { id: 'a8', projectName: 'Sede / Estructura General', weeklyHours: 12.5, months: 12 },
+        { 
+          id: 'a6', 
+          projectId: currentProjectId || availableProjects[0]?.id || 'p1', 
+          projectName: currentProjectName || availableProjects[0]?.name || 'Proyecto Inserción IRPF', 
+          weeklyHours: 10, 
+          months: 12 
+        },
+        { 
+          id: 'a7', 
+          projectId: availableProjects[1]?.id || 'p2', 
+          projectName: availableProjects[1]?.name || 'Programa Familias', 
+          weeklyHours: 15, 
+          months: 12 
+        },
+        { 
+          id: 'a8', 
+          projectId: 'sede', 
+          projectName: 'Sede / Estructura General', 
+          weeklyHours: 12.5, 
+          months: 12 
+        },
       ]
     }
   ];
@@ -108,10 +142,10 @@ export function PersonalMatrixCalculator({
   availableProjects = [],
 }: PersonalMatrixCalculatorProps) {
   const uid = useId();
-  const init = parseInit(initialData, projectName);
+  const init = parseInit(initialData, projectId, projectName, availableProjects);
   const { toasts, showToast, removeToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'plantilla' | 'matriz' | 'proyectos'>('plantilla');
+  const [activeTab, setActiveTab] = useState<'plantilla' | 'porcentajes' | 'matriz' | 'proyectos'>('plantilla');
   const [organizationName, setOrganizationName] = useState<string>(init.organizationName || 'Entidad Social');
   const [workers, setWorkers] = useState<Worker[]>(init.workers || []);
   const [isSaving, setIsSaving] = useState(false);
@@ -126,8 +160,9 @@ export function PersonalMatrixCalculator({
     // Horas asignadas
     const totalHorasAsignadas = w.allocations.reduce((acc, a) => acc + (Number(a.weeklyHours) || 0), 0);
     const pctAsignado = w.maxWeeklyHours > 0 ? (totalHorasAsignadas / w.maxWeeklyHours) * 100 : 0;
+    const horasDisponibles = Math.max(0, w.maxWeeklyHours - totalHorasAsignadas);
     
-    // Coste por hora (asumiendo jornada anual estándar de 1650 horas o semanal * 44 semanas)
+    // Coste por hora
     const horasAnuales = (w.maxWeeklyHours || 37.5) * 44;
     const costeHora = horasAnuales > 0 ? costeEmpresaAnual / horasAnuales : 0;
 
@@ -138,12 +173,14 @@ export function PersonalMatrixCalculator({
       costeEmpresaAnual,
       totalHorasAsignadas,
       pctAsignado,
+      horasDisponibles,
       costeHora,
     };
   };
 
   // Acciones de trabajadores
   const addWorker = () => {
+    const defaultProject = availableProjects[0] || { id: projectId || 'p1', name: projectName || 'Proyecto Principal' };
     const newWorker: Worker = {
       id: String(Date.now()),
       name: '',
@@ -154,7 +191,13 @@ export function PersonalMatrixCalculator({
       ssPct: 31.4,
       maxWeeklyHours: 37.5,
       allocations: [
-        { id: `a-${Date.now()}-1`, projectName: projectName || 'Proyecto Principal', weeklyHours: 20, months: 12 }
+        { 
+          id: `a-${Date.now()}-1`, 
+          projectId: defaultProject.id, 
+          projectName: defaultProject.name, 
+          weeklyHours: 20, 
+          months: 12 
+        }
       ]
     };
     setWorkers(prev => [...prev, newWorker]);
@@ -171,11 +214,13 @@ export function PersonalMatrixCalculator({
 
   // Acciones de asignaciones
   const addAllocation = (workerId: string) => {
+    const defaultProject = availableProjects[0] || { id: 'sede', name: 'Sede / Estructura General' };
     setWorkers(prev => prev.map(w => {
       if (w.id !== workerId) return w;
       const newAlloc: ProjectAllocation = {
         id: `alloc-${Date.now()}`,
-        projectName: 'Nuevo Proyecto / Subvención',
+        projectId: defaultProject.id,
+        projectName: defaultProject.name,
         weeklyHours: 10,
         months: 12
       };
@@ -183,7 +228,25 @@ export function PersonalMatrixCalculator({
     }));
   };
 
-  const updateAllocation = (workerId: string, allocId: string, field: keyof ProjectAllocation, value: unknown) => {
+  const updateAllocationProject = (workerId: string, allocId: string, targetProjectId: string) => {
+    let targetName = 'Sede / Estructura General';
+    if (targetProjectId === 'sede') {
+      targetName = 'Sede / Estructura General';
+    } else {
+      const found = availableProjects.find(p => p.id === targetProjectId);
+      if (found) targetName = found.name;
+    }
+
+    setWorkers(prev => prev.map(w => {
+      if (w.id !== workerId) return w;
+      const updatedAllocations = w.allocations.map(a => 
+        a.id === allocId ? { ...a, projectId: targetProjectId, projectName: targetName } : a
+      );
+      return { ...w, allocations: updatedAllocations };
+    }));
+  };
+
+  const updateAllocationField = (workerId: string, allocId: string, field: keyof ProjectAllocation, value: unknown) => {
     setWorkers(prev => prev.map(w => {
       if (w.id !== workerId) return w;
       const updatedAllocations = w.allocations.map(a => a.id === allocId ? { ...a, [field]: value } : a);
@@ -208,19 +271,21 @@ export function PersonalMatrixCalculator({
     new Set(workers.flatMap(w => w.allocations.map(a => a.projectName.trim())).filter(Boolean))
   );
 
-  const handleSave = async () => {
+  const handleSaveAndSync = async () => {
     setIsSaving(true);
     try {
       const payload: PersonalMatrixData = {
         organizationName,
         workers,
       };
-      if (projectId) {
-        await saveToolData(projectId, 'gestion-personal', payload);
+      const res = await savePersonalMatrixAction(payload, projectId, true);
+      if (res.success) {
+        showToast('Matriz guardada y costes sincronizados con todos los proyectos', 'success');
+      } else {
+        showToast(res.error || 'Error al guardar la matriz', 'error');
       }
-      showToast('Matriz de personal guardada correctamente', 'success');
     } catch {
-      showToast('Error al guardar la matriz de personal', 'error');
+      showToast('Error al guardar y sincronizar la matriz de personal', 'error');
     }
     setIsSaving(false);
   };
@@ -246,12 +311,6 @@ export function PersonalMatrixCalculator({
 
   return (
     <div id="personal-export-target" className={styles.container}>
-      <datalist id={`${uid}-projects-list`}>
-        {availableProjects.map(p => (
-          <option key={p.id} value={p.name} />
-        ))}
-      </datalist>
-
       {/* Cabecera de la Entidad */}
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', padding: '1rem 1.5rem', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -271,6 +330,36 @@ export function PersonalMatrixCalculator({
             />
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={handleSaveAndSync}
+          disabled={isSaving}
+          style={{
+            backgroundColor: 'var(--color-primary-600)',
+            color: 'white',
+            border: 'none',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '8px',
+            fontWeight: 600,
+            fontSize: '0.875rem',
+            cursor: isSaving ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
+          }}
+        >
+          <RefreshCw size={16} className={isSaving ? styles.spinner : ''} />
+          <span>{isSaving ? 'Sincronizando...' : '💾 Guardar y Sincronizar Proyectos'}</span>
+        </button>
+      </div>
+
+      <div className={styles.syncNotice}>
+        <CheckCircle2 size={20} style={{ flexShrink: 0 }} />
+        <span>
+          <strong>Sincronización Bidireccional Activa:</strong> Cualquier trabajador y horas asignadas a un proyecto real se vincularán automáticamente a su presupuesto de costes en la sección de personal.
+        </span>
       </div>
 
       {/* Pestañas de Vista */}
@@ -281,7 +370,15 @@ export function PersonalMatrixCalculator({
           className={`${styles.tabBtn} ${activeTab === 'plantilla' ? styles.tabActive : ''}`}
         >
           <User size={18} />
-          <span>1. Plantilla y Costes Salariales</span>
+          <span>1. Plantilla y Asignaciones</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('porcentajes')}
+          className={`${styles.tabBtn} ${activeTab === 'porcentajes' ? styles.tabActive : ''}`}
+        >
+          <PieChart size={18} />
+          <span>2. Panel de Porcentajes de Imputación</span>
         </button>
         <button
           type="button"
@@ -289,7 +386,7 @@ export function PersonalMatrixCalculator({
           className={`${styles.tabBtn} ${activeTab === 'matriz' ? styles.tabActive : ''}`}
         >
           <FileSpreadsheet size={18} />
-          <span>2. Matriz Global de Imputación</span>
+          <span>3. Matriz Consolidada de la ONG</span>
         </button>
         <button
           type="button"
@@ -297,7 +394,7 @@ export function PersonalMatrixCalculator({
           className={`${styles.tabBtn} ${activeTab === 'proyectos' ? styles.tabActive : ''}`}
         >
           <Building2 size={18} />
-          <span>3. Costes de Personal por Proyecto</span>
+          <span>4. Costes de Personal por Proyecto</span>
         </button>
       </div>
 
@@ -320,7 +417,7 @@ export function PersonalMatrixCalculator({
         </div>
       </div>
 
-      {/* VISTA 1: PLANTILLA Y FICHAS DE TRABAJADORES */}
+      {/* VISTA 1: PLANTILLA Y FICHAS DE TRABAJADORES CON PROYECTOS REALES */}
       {activeTab === 'plantilla' && (
         <div>
           {workers.map((worker) => {
@@ -328,9 +425,9 @@ export function PersonalMatrixCalculator({
             let statusBadge = <span className={styles.badgeOk}><CheckCircle2 size={14} /> 100% Imputado ({m.totalHorasAsignadas}h / {worker.maxWeeklyHours}h)</span>;
             
             if (m.totalHorasAsignadas > worker.maxWeeklyHours) {
-              statusBadge = <span className={styles.badgeDanger}><AlertCircle size={14} /> Sobreimputación Ilegal ({m.totalHorasAsignadas}h / {worker.maxWeeklyHours}h)</span>;
+              statusBadge = <span className={styles.badgeDanger}><AlertCircle size={14} /> Sobreimputación (+{(m.totalHorasAsignadas - worker.maxWeeklyHours).toFixed(1)}h)</span>;
             } else if (m.totalHorasAsignadas < worker.maxWeeklyHours) {
-              statusBadge = <span className={styles.badgeWarning}><AlertTriangle size={14} /> Horas Disponibles ({m.totalHorasAsignadas}h / {worker.maxWeeklyHours}h)</span>;
+              statusBadge = <span className={styles.badgeWarning}><AlertTriangle size={14} /> {m.horasDisponibles.toFixed(1)}h disponibles</span>;
             }
 
             return (
@@ -440,24 +537,24 @@ export function PersonalMatrixCalculator({
                   </div>
                 </div>
 
-                {/* Reparto Horario e Imputación a Proyectos */}
+                {/* Reparto Horario e Imputación a Proyectos REALES */}
                 <div className={styles.allocationsSection}>
                   <div className={styles.allocationsHeader}>
                     <span className={styles.allocationsTitle}>
                       <Briefcase size={16} color="#2563eb" />
-                      Imputación a Proyectos y Subvenciones
+                      Imputación a Proyectos Reales de la Entidad
                     </span>
                     <button
                       type="button"
                       onClick={() => addAllocation(worker.id)}
                       className={styles.addBtn}
                     >
-                      <Plus size={14} /> Añadir Proyecto
+                      <Plus size={14} /> Asignar a Proyecto
                     </button>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 90px 120px 36px', gap: '0.75rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                    <span>Proyecto / Subvención</span>
+                    <span>Proyecto Real / Subvención</span>
                     <span>Horas/sem</span>
                     <span>Meses</span>
                     <span style={{ textAlign: 'right' }}>Coste Imputado</span>
@@ -471,14 +568,21 @@ export function PersonalMatrixCalculator({
 
                     return (
                       <div key={alloc.id} className={styles.allocationRow}>
-                        <input
-                          type="text"
-                          className={styles.input}
-                          list={`${uid}-projects-list`}
-                          value={alloc.projectName}
-                          onChange={e => updateAllocation(worker.id, alloc.id, 'projectName', e.target.value)}
-                          placeholder="Nombre del Proyecto o Subvención"
-                        />
+                        <select
+                          className={styles.select}
+                          value={alloc.projectId || (availableProjects.find(p => p.name === alloc.projectName)?.id || 'sede')}
+                          onChange={e => updateAllocationProject(worker.id, alloc.id, e.target.value)}
+                        >
+                          <optgroup label="Proyectos Creados en WebSocial">
+                            {availableProjects.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Estructura General">
+                            <option value="sede">🏢 Sede / Estructura General (No subvencionado)</option>
+                          </optgroup>
+                        </select>
+
                         <input
                           type="number"
                           min="0.5"
@@ -486,7 +590,7 @@ export function PersonalMatrixCalculator({
                           step="0.5"
                           className={styles.input}
                           value={alloc.weeklyHours || ''}
-                          onChange={e => updateAllocation(worker.id, alloc.id, 'weeklyHours', parseFloat(e.target.value) || 0)}
+                          onChange={e => updateAllocationField(worker.id, alloc.id, 'weeklyHours', parseFloat(e.target.value) || 0)}
                           placeholder="Horas"
                         />
                         <input
@@ -495,7 +599,7 @@ export function PersonalMatrixCalculator({
                           max="12"
                           className={styles.input}
                           value={alloc.months || ''}
-                          onChange={e => updateAllocation(worker.id, alloc.id, 'months', parseInt(e.target.value) || 12)}
+                          onChange={e => updateAllocationField(worker.id, alloc.id, 'months', parseInt(e.target.value) || 12)}
                           placeholder="Meses"
                         />
                         <div className={styles.allocationCost}>
@@ -526,7 +630,86 @@ export function PersonalMatrixCalculator({
         </div>
       )}
 
-      {/* VISTA 2: MATRIZ GLOBAL DE IMPUTACIÓN */}
+      {/* VISTA 2: PANEL DE PORCENTAJES DE IMPUTACIÓN Y DEDICACIÓN VISUAL */}
+      {activeTab === 'porcentajes' && (
+        <div>
+          {workers.map((worker) => {
+            const m = calculateWorkerMetrics(worker);
+            return (
+              <div key={worker.id} className={styles.pctCard}>
+                <div className={styles.pctHeader}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+                      {worker.name ? worker.name.charAt(0) : 'T'}
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700 }}>{worker.name || 'Sin nombre'}</h4>
+                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{worker.role} · Jornada de {worker.maxWeeklyHours}h/semana</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    {m.totalHorasAsignadas === worker.maxWeeklyHours ? (
+                      <span className={styles.badgeOk}><CheckCircle2 size={14} /> 100% Imputado</span>
+                    ) : m.totalHorasAsignadas > worker.maxWeeklyHours ? (
+                      <span className={styles.badgeDanger}><AlertCircle size={14} /> {formatPct(m.pctAsignado)} (Exceso de {(m.totalHorasAsignadas - worker.maxWeeklyHours).toFixed(1)}h)</span>
+                    ) : (
+                      <span className={styles.badgeWarning}><AlertTriangle size={14} /> {formatPct(m.pctAsignado)} ({m.horasDisponibles.toFixed(1)}h libres)</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Barra Apilada Visual de Dedicación */}
+                <div className={styles.stackedProgress}>
+                  {worker.allocations.map((alloc, idx) => {
+                    const pct = worker.maxWeeklyHours > 0 ? (alloc.weeklyHours / worker.maxWeeklyHours) * 100 : 0;
+                    const color = PROJECT_COLORS[idx % PROJECT_COLORS.length];
+                    if (pct <= 0) return null;
+
+                    return (
+                      <div
+                        key={alloc.id}
+                        className={styles.progressSegment}
+                        style={{
+                          width: `${Math.min(pct, 100)}%`,
+                          backgroundColor: color,
+                        }}
+                        title={`${alloc.projectName}: ${alloc.weeklyHours}h (${formatPct(pct)})`}
+                      >
+                        {pct >= 12 ? `${formatPct(pct)}` : ''}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Leyenda y Desglose por Proyecto */}
+                <div className={styles.pctLegend}>
+                  {worker.allocations.map((alloc, idx) => {
+                    const pct = worker.maxWeeklyHours > 0 ? (alloc.weeklyHours / worker.maxWeeklyHours) * 100 : 0;
+                    const color = PROJECT_COLORS[idx % PROJECT_COLORS.length];
+                    const costeMes = (m.costeEmpresaMes * pct) / 100;
+
+                    return (
+                      <div key={alloc.id} className={styles.legendItem}>
+                        <div className={styles.legendDot} style={{ backgroundColor: color }} />
+                        <span><strong>{alloc.projectName}:</strong> {alloc.weeklyHours}h ({formatPct(pct)}) · {formatCurrency(costeMes)}/m</span>
+                      </div>
+                    );
+                  })}
+                  {m.horasDisponibles > 0 && (
+                    <div className={styles.legendItem} style={{ color: '#d97706' }}>
+                      <div className={styles.legendDot} style={{ backgroundColor: '#e2e8f0', border: '1px dashed #d97706' }} />
+                      <span><em>{m.horasDisponibles.toFixed(1)}h libres sin imputar ({formatPct((m.horasDisponibles / worker.maxWeeklyHours) * 100)})</em></span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* VISTA 3: MATRIZ GLOBAL DE IMPUTACIÓN */}
       {activeTab === 'matriz' && (
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
@@ -582,7 +765,7 @@ export function PersonalMatrixCalculator({
         </div>
       )}
 
-      {/* VISTA 3: RESUMEN ECONÓMICO POR PROYECTO */}
+      {/* VISTA 4: RESUMEN ECONÓMICO POR PROYECTO */}
       {activeTab === 'proyectos' && (
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
@@ -659,27 +842,26 @@ export function PersonalMatrixCalculator({
       <ResultPanel title="Cuadro Oficial de Imputación de Personal (Auditoría)" copyText={copyText}>
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }} className="no-print">
           <ExportPdfButton targetId="personal-export-target" filename="matriz-imputacion-personal" projectName={organizationName} />
-          {projectId && (
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              style={{
-                backgroundColor: 'var(--color-primary-600)',
-                color: 'white',
-                padding: '0.75rem 1.5rem',
-                borderRadius: '0.5rem',
-                border: 'none',
-                fontWeight: 600,
-                cursor: isSaving ? 'not-allowed' : 'pointer',
-                opacity: isSaving ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              {isSaving ? 'Guardando...' : '💾 Guardar en Proyecto'}
-            </button>
-          )}
+          <button
+            onClick={handleSaveAndSync}
+            disabled={isSaving}
+            style={{
+              backgroundColor: 'var(--color-primary-600)',
+              color: 'white',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '0.5rem',
+              border: 'none',
+              fontWeight: 600,
+              cursor: isSaving ? 'not-allowed' : 'pointer',
+              opacity: isSaving ? 0.7 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            <RefreshCw size={16} className={isSaving ? styles.spinner : ''} />
+            <span>{isSaving ? 'Sincronizando...' : '💾 Guardar y Sincronizar Proyectos'}</span>
+          </button>
         </div>
       </ResultPanel>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
