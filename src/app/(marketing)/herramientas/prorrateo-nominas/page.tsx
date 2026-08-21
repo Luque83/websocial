@@ -16,9 +16,14 @@ export default async function ProrrateoNominasPage({
   const sp = await searchParams;
   const projectId = sp?.projectId as string | undefined;
   let initialData = undefined;
+  let projectName = undefined;
 
   if (projectId) {
     initialData = await getToolData(projectId, 'prorrateo-nominas');
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+    const { data } = await supabase.from('projects').select('name').eq('id', projectId).single();
+    if (data) projectName = data.name;
   }
 
   return (
@@ -34,7 +39,7 @@ export default async function ProrrateoNominasPage({
         'Copia o imprime la tabla resultante para tu justificación.',
       ]}
     >
-      <ProrrateoCalculator initialData={initialData} projectId={projectId} />
+      <ProrrateoCalculator initialData={initialData} projectId={projectId} projectName={projectName} />
     </ToolLayout>
   );
 }

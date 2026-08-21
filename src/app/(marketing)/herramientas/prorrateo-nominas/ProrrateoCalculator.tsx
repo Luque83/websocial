@@ -6,6 +6,7 @@ import { ResultPanel } from '@/components/tools/ResultPanel';
 import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
 import styles from './prorrateo.module.css';
 
 interface ProjectEntry {
@@ -24,16 +25,16 @@ interface ProrrateoData {
   salary?: string;
   projects?: ProjectEntry[];
 }
-
 interface ProrrateoCalculatorProps {
   initialData?: unknown;
   projectId?: string;
+  projectName?: string;
 }
 
 const parseInit = (data: unknown): ProrrateoData =>
   (data && typeof data === 'object' ? data : {}) as ProrrateoData;
 
-export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalculatorProps) {
+export function ProrrateoCalculator({ initialData, projectId, projectName }: ProrrateoCalculatorProps) {
   const uid = useId();
   
   const init = parseInit(initialData);
@@ -168,9 +169,10 @@ export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalcula
         isEmpty={isEmpty}
         emptyMessage="Introduce el salario y las horas por proyecto para calcular el prorrateo."
       >
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            <thead>
+        <div id="prorrateo-export-target">
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
               <tr>
                 <th>Proyecto</th>
                 <th className={styles.numCol}>Horas/sem.</th>
@@ -201,14 +203,16 @@ export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalcula
             </tfoot>
           </table>
         </div>
+        </div>
 
-        {projectId && (
-          <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }} className="no-print">
+          <ExportPdfButton targetId="prorrateo-export-target" filename="prorrateo-nominas" projectName={projectName} />
+          {projectId && (
             <button
               onClick={handleSave}
               disabled={isSaving}
               style={{
-                backgroundColor: 'var(--primary-600)',
+                backgroundColor: 'var(--color-primary-600)',
                 color: 'white',
                 padding: '0.75rem 1.5rem',
                 borderRadius: '0.5rem',
@@ -223,8 +227,8 @@ export function ProrrateoCalculator({ initialData, projectId }: ProrrateoCalcula
             >
               {isSaving ? 'Guardando...' : '💾 Guardar en Proyecto'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </ResultPanel>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>

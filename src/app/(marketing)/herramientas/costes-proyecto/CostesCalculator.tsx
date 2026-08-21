@@ -6,6 +6,7 @@ import { ResultPanel } from '@/components/tools/ResultPanel';
 import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
 import styles from './costes.module.css';
 
 type PartidaCategory = 'personal' | 'material' | 'actividades' | 'comunicacion' | 'otros';
@@ -39,18 +40,21 @@ interface CostesData {
 interface CostesCalculatorProps {
   initialData?: unknown;
   projectId?: string;
+  projectName?: string;
 }
 
 const parseInit = (data: unknown): CostesData =>
   (data && typeof data === 'object' ? data : {}) as CostesData;
 
-export function CostesCalculator({ initialData, projectId }: CostesCalculatorProps) {
+export function CostesCalculator({ initialData, projectId, projectName: externalProjectName }: CostesCalculatorProps) {
   const uid = useId();
   
   const init = parseInit(initialData);
   const { toasts, showToast, removeToast } = useToast();
 
-  const [projectName, setProjectName] = useState<string>(init.projectName || '');
+  const [localProjectName, setLocalProjectName] = useState<string>(init.projectName || '');
+  const projectName = externalProjectName || localProjectName;
+
   const [durationMonths, setDurationMonths] = useState<number>(init.durationMonths || 12);
   const [indirectPct, setIndirectPct] = useState<number>(init.indirectPct !== undefined ? init.indirectPct : 10);
   const [partidas, setPartidas] = useState<PartidaEntry[]>(init.partidas || [
@@ -117,7 +121,7 @@ export function CostesCalculator({ initialData, projectId }: CostesCalculatorPro
   const isEmpty = partidas.every(p => p.monthlyAmount === 0);
 
   return (
-    <div>
+    <div id="costes-export-target">
       <div className={styles.row2}>
         <div className={styles.formGroup}>
           <label htmlFor={`${uid}-name`} className={styles.label}>Nombre del proyecto</label>
@@ -126,7 +130,8 @@ export function CostesCalculator({ initialData, projectId }: CostesCalculatorPro
             type="text"
             className={styles.input}
             value={projectName}
-            onChange={e => setProjectName(e.target.value)}
+            onChange={e => setLocalProjectName(e.target.value)}
+            disabled={!!externalProjectName}
             placeholder="Ej: Proyecto de inserción laboral 2026"
           />
         </div>
@@ -276,13 +281,14 @@ export function CostesCalculator({ initialData, projectId }: CostesCalculatorPro
           </div>
         )}
         
-        {projectId && (
-          <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }} className="no-print">
+          <ExportPdfButton targetId="costes-export-target" filename="presupuesto" projectName={projectName} />
+          {projectId && (
             <button
               onClick={handleSave}
               disabled={isSaving}
               style={{
-                backgroundColor: 'var(--primary-600)',
+                backgroundColor: 'var(--color-primary-600)',
                 color: 'white',
                 padding: '0.75rem 1.5rem',
                 borderRadius: '0.5rem',
@@ -297,8 +303,8 @@ export function CostesCalculator({ initialData, projectId }: CostesCalculatorPro
             >
               {isSaving ? 'Guardando...' : '💾 Guardar en Proyecto'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </ResultPanel>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>

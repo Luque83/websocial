@@ -16,9 +16,14 @@ export default async function CostesProyectoPage({
   const sp = await searchParams;
   const projectId = sp?.projectId as string | undefined;
   let initialData = undefined;
+  let projectName = undefined;
 
   if (projectId) {
     initialData = await getToolData(projectId, 'costes-proyecto');
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+    const { data } = await supabase.from('projects').select('name').eq('id', projectId).single();
+    if (data) projectName = data.name;
   }
 
   return (
@@ -35,7 +40,7 @@ export default async function CostesProyectoPage({
         'Copia o imprime el presupuesto para incluirlo en tu solicitud.',
       ]}
     >
-      <CostesCalculator initialData={initialData} projectId={projectId} />
+      <CostesCalculator initialData={initialData} projectId={projectId} projectName={projectName} />
     </ToolLayout>
   );
 }

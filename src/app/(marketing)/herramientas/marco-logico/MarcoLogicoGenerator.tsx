@@ -6,6 +6,7 @@ import { ResultPanel } from '@/components/tools/ResultPanel';
 import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
 import styles from './marco-logico.module.css';
 
 interface Activity {
@@ -52,14 +53,15 @@ const generateId = () => Date.now().toString() + Math.random().toString(36).subs
 interface MarcoLogicoGeneratorProps {
   initialData?: Partial<MarcoLogico>;
   projectId?: string;
+  projectName?: string;
 }
 
-export function MarcoLogicoGenerator({ initialData, projectId }: MarcoLogicoGeneratorProps) {
+export function MarcoLogicoGenerator({ initialData, projectId, projectName: externalProjectName }: MarcoLogicoGeneratorProps) {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
   const [ml, setMl] = useState<MarcoLogico>({
-    projectName: '',
+    projectName: externalProjectName || initialData?.projectName || '',
     finDescription: '',
     finIndicator: '',
     finSource: '',
@@ -196,7 +198,7 @@ ${res.activities.map((act, aIdx) => `
           <div className={styles.formCardTitle}>Paso 1: Fin y Propósito</div>
           <div className={styles.formGroup}>
             <label className={styles.label}>Nombre del Proyecto</label>
-            <input className={styles.input} value={ml.projectName} onChange={e => updateField('projectName', e.target.value)} />
+            <input className={styles.input} value={ml.projectName} onChange={e => updateField('projectName', e.target.value)} disabled={!!externalProjectName} />
           </div>
           
           <div className={styles.sectionDivider}>FIN (Impacto)</div>
@@ -314,8 +316,9 @@ ${res.activities.map((act, aIdx) => `
 
       {step === 4 && (
         <ResultPanel title="Matriz de Marco Lógico" copyText={copyText}>
-          <div className={styles.tableWrapper}>
-            <table className={styles.matrixTable}>
+          <div id="ml-export-target">
+            <div className={styles.tableWrapper}>
+              <table className={styles.matrixTable}>
               <thead>
                 <tr>
                   <th>Nivel</th>
@@ -374,6 +377,7 @@ ${res.activities.map((act, aIdx) => `
               </tbody>
             </table>
           </div>
+          </div>
         </ResultPanel>
       )}
 
@@ -384,8 +388,11 @@ ${res.activities.map((act, aIdx) => `
         {step < 4 ? (
           <button className={styles.btnPrimary} onClick={nextStep}>{step === 3 ? 'Ver Matriz' : 'Siguiente'} <ArrowRight size={16}/></button>
         ) : (
-          <div style={{ display: 'flex', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <button className={styles.btnSecondary} onClick={() => setStep(1)}>Editar Formulario</button>
+            <div className="no-print">
+              <ExportPdfButton targetId="ml-export-target" filename="marco-logico" projectName={ml.projectName} />
+            </div>
             {projectId && (
               <button 
                 className={styles.btnPrimary} 
