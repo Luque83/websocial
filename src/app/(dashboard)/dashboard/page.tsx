@@ -79,9 +79,7 @@ export default async function DashboardPage() {
                     <Card className={styles.projectCard} padding="md">
                       <div className={styles.projectHeader}>
                         <h3 className={styles.projectName}>{project.name}</h3>
-                        <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                          <DeleteProjectButton projectId={project.id} projectName={project.name} />
-                        </div>
+                        <DeleteProjectButton projectId={project.id} projectName={project.name} />
                       </div>
                       
                       {project.description && (
