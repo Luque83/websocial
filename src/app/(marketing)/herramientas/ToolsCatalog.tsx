@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   Target,
   BarChart2,
+  UserCheck,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -37,6 +38,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   FileCheck,
   ShieldAlert,
   Target,
+  UserCheck,
 };
 
 export function ToolsCatalog({ initialTools }: { initialTools: ToolItem[] }) {

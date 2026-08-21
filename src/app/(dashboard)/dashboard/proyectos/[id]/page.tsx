@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, Target, Calculator, Users, FileText, BarChart2, Calendar, CheckCircle, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Target, Calculator, Users, FileText, BarChart2, Calendar, CheckCircle, ShieldAlert, UserCheck } from 'lucide-react';
 import { getDashboardTools } from '@/config/tools.registry';
 import styles from './page.module.css';
 
@@ -16,6 +16,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   BarChart2,
   Calendar,
   ShieldAlert,
+  UserCheck,
 };
 
 interface ProjectToolRow {

@@ -84,6 +84,16 @@ export const TOOLS_REGISTRY: ToolRegistryEntry[] = [
     publicHref: '/herramientas/calculadora-bajas',
     dashboardEnabled: true,
   },
+  {
+    slug: 'gestion-personal',
+    name: 'Matriz de Imputación de Personal',
+    description: 'Gestión integral de plantilla, costes empresa y reparto multiproyecto con control de horas y sobreimputación.',
+    iconName: 'UserCheck',
+    category: 'calculadoras',
+    status: 'available',
+    publicHref: '/herramientas/gestion-personal',
+    dashboardEnabled: true,
+  },
 ];
 
 export const getAvailableTools = () =>

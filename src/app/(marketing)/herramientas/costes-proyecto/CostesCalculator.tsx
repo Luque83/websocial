@@ -59,6 +59,7 @@ interface CostesCalculatorProps {
   projectName?: string;
   mlData?: unknown;
   prorrateoData?: unknown;
+  personalMatrixData?: unknown;
 }
 
 const parseInit = (data: unknown): CostesData =>
@@ -135,6 +136,7 @@ export function CostesCalculator({
   projectName: externalProjectName,
   mlData,
   prorrateoData,
+  personalMatrixData,
 }: CostesCalculatorProps) {
   const uid = useId();
   const init = parseInit(initialData);
@@ -257,6 +259,56 @@ export function CostesCalculator({
     showToast(`Personal importado desde Prorrateo (${formatCurrency(newPersonalPartida.monthlyAmount)}/mes)`, 'success');
   };
 
+  const importFromPersonalMatrix = () => {
+    if (!personalMatrixData || typeof personalMatrixData !== 'object') {
+      showToast('No se encontraron datos en la Matriz de Personal', 'warning');
+      return;
+    }
+    const d = personalMatrixData as { workers?: Array<{ name: string; role: string; category: string; salaryMonthly: number; pagas: number; ssPct: number; maxWeeklyHours: number; allocations?: Array<{ projectName: string; weeklyHours: number; months: number }> }> };
+    if (!Array.isArray(d.workers) || d.workers.length === 0) {
+      showToast('No hay trabajadores registrados en la Matriz de Personal', 'warning');
+      return;
+    }
+
+    const currentPName = (projectName || '').trim().toLowerCase();
+    const matchingWorkers: PartidaEntry[] = [];
+
+    d.workers.forEach((w, idx) => {
+      const salMes = w.pagas === 14 ? (w.salaryMonthly * 14) / 12 : w.salaryMonthly;
+      const ssMes = (salMes * (w.ssPct || 31.4)) / 100;
+      const costeEmpresaMes = salMes + ssMes;
+
+      const alloc = w.allocations?.find(a => 
+        currentPName && a.projectName.trim().toLowerCase() === currentPName
+      ) || w.allocations?.[0];
+
+      if (alloc) {
+        const pct = (w.maxWeeklyHours || 37.5) > 0 ? (alloc.weeklyHours / (w.maxWeeklyHours || 37.5)) : 1;
+        const costeImputadoMes = costeEmpresaMes * pct;
+        const months = alloc.months || durationMonths;
+
+        matchingWorkers.push({
+          id: `matrix-${Date.now()}-${idx}`,
+          category: 'personal',
+          description: `${w.name || w.role} (${w.role}) - ${alloc.weeklyHours}h/sem`,
+          puesto: w.role || 'Técnico de Proyecto',
+          funciones: `Dedicación de ${alloc.weeklyHours}h semanales al proyecto (${(pct * 100).toFixed(0)}% jornada).`,
+          monthlyAmount: Math.round(costeImputadoMes),
+          months: months,
+          costeReal: Math.round(costeImputadoMes) * months,
+        });
+      }
+    });
+
+    if (matchingWorkers.length === 0) {
+      showToast('No se encontraron asignaciones para este proyecto en la Matriz', 'info');
+      return;
+    }
+
+    setPartidas(prev => [...prev, ...matchingWorkers]);
+    showToast(`Se importaron ${matchingWorkers.length} puestos desde la Matriz de Personal`, 'success');
+  };
+
   // Cálculos Presupuestados
   const directCostsPresupuesto = partidas.reduce(
     (sum, p) => sum + (p.monthlyAmount || 0) * (p.months || 0),
@@ -373,7 +425,12 @@ export function CostesCalculator({
       <div className={styles.sectionHeader}>
         <span>Partidas de Gasto y Personal</span>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {prorrateoWorker && (
+          {Boolean(personalMatrixData) && (
+            <button type="button" onClick={importFromPersonalMatrix} className={styles.syncBtn}>
+              👥 Importar de la Matriz de Personal
+            </button>
+          )}
+          {Boolean(prorrateoWorker) && (
             <button type="button" onClick={importFromProrrateo} className={styles.syncBtn}>
               👤 Importar Personal (Prorrateo)
             </button>
