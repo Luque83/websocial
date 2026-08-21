@@ -34,6 +34,36 @@ export default async function DashboardPage() {
         </div>
       </header>
 
+      {/* BANNER DESTACADO ASISTENTE DE FORMULACIÓN CON IA */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #2563eb 100%)',
+        color: 'white',
+        borderRadius: '16px',
+        padding: '2rem 2.5rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '1.5rem',
+        boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.15)'
+      }}>
+        <div style={{ maxWidth: '640px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.15)', padding: '0.35rem 0.85rem', borderRadius: '9999px', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.75rem', backdropFilter: 'blur(4px)' }}>
+            <span style={{ color: '#fbbf24' }}>✨ Nuevo en WebSocial</span> · Asistente IA de Convocatorias
+          </div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', margin: '0 0 0.5rem 0', lineHeight: 1.2 }}>
+            Formula tu Proyecto Social completo en 10 segundos
+          </h2>
+          <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.9)', fontSize: '0.9375rem', lineHeight: 1.5 }}>
+            Pega las bases de la subvención (IRPF, FSE, Ministerios) o describe tu idea. La IA estructurará el Marco Lógico, el Presupuesto con costes de personal, los Indicadores y la Memoria Técnica automáticamente.
+          </p>
+        </div>
+        <div>
+          <CreateAIProjectModal />
+        </div>
+      </div>
+
       <section className={styles.statsGrid}>
         <Card className={styles.statCard} padding="lg">
           <div className={styles.statIconWrapper} style={{ backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)' }}>
