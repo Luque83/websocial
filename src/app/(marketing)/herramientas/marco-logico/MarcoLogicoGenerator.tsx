@@ -365,7 +365,12 @@ ${res.activities.map((act, aIdx) => `
         {step < 4 ? (
           <button className={styles.btnPrimary} onClick={nextStep}>{step === 3 ? 'Ver Matriz' : 'Siguiente'} <ArrowRight size={16}/></button>
         ) : (
-          <button className={styles.btnSecondary} onClick={() => setStep(1)}>Editar Formulario</button>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button className={styles.btnSecondary} onClick={() => setStep(1)}>Editar Formulario</button>
+            <button className={styles.btnPrimary} onClick={() => alert('Próximamente podrás guardar esta matriz en tus proyectos.')}>
+              💾 Guardar en Proyecto (Próximamente)
+            </button>
+          </div>
         )}
       </div>
     </div>

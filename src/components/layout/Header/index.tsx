@@ -58,7 +58,7 @@ export function Header() {
         </nav>
 
         <div className={styles.actions}>
-          <Link href="#" className={styles.ctaButton}>
+          <Link href="/login" className={styles.ctaButton}>
             Acceder
           </Link>
           <button 
@@ -91,7 +91,7 @@ export function Header() {
           </nav>
           <div className={styles.mobileActions}>
             <Link 
-              href="#" 
+              href="/login" 
               className={styles.mobileCtaButton}
               onClick={() => setIsMobileMenuOpen(false)}
             >
