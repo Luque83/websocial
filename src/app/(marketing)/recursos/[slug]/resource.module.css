@@ -1,6 +1,6 @@
 .main {
-  padding-top: calc(72px + var(--space-12));
-  padding-bottom: var(--section-py);
+  padding-top: var(--space-8, 2rem);
+  padding-bottom: var(--space-16, 4rem);
 }
 
 .header {

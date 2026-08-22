@@ -1,5 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
+import { Logo } from '@/components/ui/Logo';
 import styles from './layout.module.css';
 
 export default function AuthLayout({
@@ -10,9 +10,7 @@ export default function AuthLayout({
   return (
     <div className={styles.layout}>
       <header className={styles.header}>
-        <Link href="/" className={styles.logo}>
-          WebSocial
-        </Link>
+        <Logo size="md" href="/" />
       </header>
       <main className={styles.main}>
         <div className={styles.card}>

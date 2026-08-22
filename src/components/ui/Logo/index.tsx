@@ -15,21 +15,30 @@ export function Logo({
   className = '',
 }: LogoProps) {
   const heightMap = {
-    sm: 32,
-    md: 40,
-    lg: 48,
+    sm: 34,
+    md: 42,
+    lg: 52,
+  };
+
+  const radiusMap = {
+    sm: '10px',
+    md: '12px',
+    lg: '14px',
   };
 
   const height = heightMap[size];
-  const width = Math.round(height * 2.2);
+  const radius = radiusMap[size];
+  // Relación de aspecto exacta de la imagen oficial (1024 / 558 = 1.8351)
+  const width = Math.round(height * 1.835);
 
   const content = (
     <div
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '0.5rem',
         textDecoration: 'none',
+        borderRadius: radius,
+        overflow: 'hidden',
       }}
       className={className}
     >
@@ -40,15 +49,23 @@ export function Logo({
           width: `${width}px`,
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'center',
           overflow: 'hidden',
-          borderRadius: '8px',
+          borderRadius: radius,
+          backgroundColor: '#ffffff',
+          boxShadow: '0 2px 6px rgba(13, 58, 95, 0.08)',
+          border: '1px solid rgba(13, 58, 95, 0.1)',
         }}
       >
         <Image
           src="/logo.jpg"
           alt="WebSocial Logo"
           fill
-          style={{ objectFit: 'contain', objectPosition: 'left center' }}
+          sizes="(max-width: 768px) 90px, 120px"
+          style={{ 
+            objectFit: 'cover',
+            borderRadius: radius,
+          }}
           priority
         />
       </div>
