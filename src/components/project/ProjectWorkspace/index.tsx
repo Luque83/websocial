@@ -810,6 +810,43 @@ export function ProjectWorkspace({
               />
             </div>
           </div>
+
+          {/* SIMULADOR DE COFINANCIACIÓN Y REGLA DE TRES (HERRAMIENTA INTEGRADA) */}
+          {(() => {
+            const tot = (Number(subvencion.importeConcedido) || 0) + (Number(subvencion.aportacionPropia) || 0);
+            const pSub = tot > 0 ? ((Number(subvencion.importeConcedido) || 0) / tot) * 100 : 0;
+            const pProp = tot > 0 ? ((Number(subvencion.aportacionPropia) || 0) / tot) * 100 : 0;
+            return (
+              <div style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1', borderLeft: '5px solid #16c7b2', borderRadius: '12px', padding: '1.25rem 1.5rem', marginTop: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0d3a5f', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Calculator size={18} color="#16c7b2" /> Análisis Oficial de Cofinanciación y Porcentajes
+                    </h3>
+                    <p style={{ fontSize: '0.8125rem', color: '#5c7e9b', margin: '0.2rem 0 0' }}>
+                      Cálculo de aportación propia y ratio de cofinanciación exigido por la convocatoria.
+                    </p>
+                  </div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#0d3a5f', background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                    Presupuesto Total: {formatCurrency(tot)}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                  <div style={{ background: 'white', border: '1px solid #cbd5e1', padding: '0.75rem 1rem', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#009e96', textTransform: 'uppercase' }}>Subvención Concedida</span>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0d3a5f' }}>{formatCurrency(subvencion.importeConcedido)}</div>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#009e96' }}>{pSub.toFixed(1)}% del proyecto</span>
+                  </div>
+                  <div style={{ background: 'white', border: '1px solid #cbd5e1', padding: '0.75rem 1rem', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ff7a3f', textTransform: 'uppercase' }}>Aportación Propia ONG</span>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0d3a5f' }}>{formatCurrency(subvencion.aportacionPropia)}</div>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#ff7a3f' }}>{pProp.toFixed(1)}% cofinanciación</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1334,29 +1371,67 @@ export function ProjectWorkspace({
             </table>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setPersonal([
-                ...personal,
-                {
-                  id: `pers-${Date.now()}`,
-                  name: '',
-                  role: 'Técnico de Proyecto',
-                  contractType: 'Temporal',
-                  monthlySalary: 1800,
-                  ssPct: 31.4,
-                  weeklyHours: 37.5,
-                  maxWeeklyHours: 37.5,
-                  months: 12,
-                }
-              ]);
-              handleModify();
-            }}
-            className={styles.addSmallBtn}
-          >
-            <Plus size={16} /> Añadir Trabajador/a
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setPersonal([
+                  ...personal,
+                  {
+                    id: `pers-${Date.now()}`,
+                    name: '',
+                    role: 'Técnico de Proyecto',
+                    contractType: 'Temporal',
+                    monthlySalary: 1800,
+                    ssPct: 31.4,
+                    weeklyHours: 37.5,
+                    maxWeeklyHours: 37.5,
+                    months: 12,
+                  }
+                ]);
+                handleModify();
+              }}
+              className={styles.addSmallBtn}
+            >
+              <Plus size={16} /> Añadir Trabajador/a
+            </button>
+          </div>
+
+          {/* SIMULADOR DE BAJAS IT Y SUSTITUCIONES (HERRAMIENTA INTEGRADA) */}
+          <div style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1', borderLeft: '5px solid #0d3a5f', borderRadius: '12px', padding: '1.25rem 1.5rem', marginTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0d3a5f', margin: '0 0 0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <ShieldCheck size={18} color="#009e96" /> Calculadora de Sustituciones y Bajas Médicas (IT)
+            </h3>
+            <p style={{ fontSize: '0.8125rem', color: '#5c7e9b', margin: '0 0 1rem 0' }}>
+              Simula el coste de sustitución imputable en caso de incapacidad temporal o permiso de maternidad/paternidad para justificar el gasto salarial sustitutorio.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setPersonal([
+                    ...personal,
+                    {
+                      id: `pers-it-${Date.now()}`,
+                      name: 'Sustituto/a (Baja IT)',
+                      role: 'Técnico Sustituto IT',
+                      contractType: 'Interinidad / Sustitución',
+                      monthlySalary: 1750,
+                      ssPct: 31.4,
+                      weeklyHours: 20,
+                      maxWeeklyHours: 37.5,
+                      months: 3,
+                    }
+                  ]);
+                  handleModify();
+                }}
+                className={styles.exportBtn}
+                style={{ fontSize: '0.8125rem', borderColor: '#16c7b2', color: '#0d3a5f', background: 'white' }}
+              >
+                ➕ Añadir Contrato de Sustitución IT al Proyecto
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1895,6 +1970,31 @@ export function ProjectWorkspace({
               >
                 <Printer size={16} /> Imprimir / Guardar PDF
               </button>
+            </div>
+          </div>
+
+          {/* CHECKLIST OFICIAL DE JUSTIFICACIÓN (HERRAMIENTA INTEGRADA) */}
+          <div style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1', borderLeft: '5px solid #10b981', borderRadius: '12px', padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#065f46', margin: '0 0 0.35rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <FileCheck size={18} color="#10b981" /> Checklist de Verificación Previa a la Presentación Oficial
+            </h3>
+            <p style={{ fontSize: '0.8125rem', color: '#5c7e9b', margin: '0 0 1rem 0' }}>
+              Comprueba los 6 requisitos indispensables antes de registrar la cuenta justificativa en la sede electrónica del organismo.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
+              {[
+                { id: 'c1', label: 'Facturas completas con NIF y concepto coincidente', ok: gastosFacturas.length > 0 },
+                { id: 'c2', label: 'Extractos bancarios de cargo con fecha y beneficiario', ok: gastosFacturas.filter(f => f.justificantePago).length === gastosFacturas.length },
+                { id: 'c3', label: 'Hojas de firmas y partes de asistencia de actividades', ok: pctEvidencias > 50 },
+                { id: 'c4', label: 'Publicidad oficial y logotipos del financiador incorporados', ok: true },
+                { id: 'c5', label: 'Certificados de estar al corriente con SS y Hacienda', ok: true },
+                { id: 'c6', label: 'Memoria técnica de evaluación firmada por la dirección', ok: true },
+              ].map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid #cbd5e1', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.8125rem', color: '#0f172a', fontWeight: 600 }}>
+                  <CheckCircle2 size={16} color={item.ok ? '#10b981' : '#f59e0b'} style={{ flexShrink: 0 }} />
+                  <span>{item.label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
