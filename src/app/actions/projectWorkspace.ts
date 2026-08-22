@@ -50,6 +50,8 @@ export interface ProjectWorkspaceData {
             tipo: 'firmas' | 'fotos' | 'informe' | 'encuesta' | 'otro';
             descripcion: string;
             estado: 'pendiente' | 'aportada' | 'validada';
+            archivoUrl?: string;
+            archivoNombre?: string;
           }>;
         }>;
       }>;
@@ -101,7 +103,12 @@ export interface ProjectWorkspaceData {
     importeImputado: number;
     partidaId: string;
     justificantePago: boolean;
+    facturaFileUrl?: string;
+    facturaFileName?: string;
+    justificanteFileUrl?: string;
+    justificanteFileName?: string;
   }>;
+  convocatoriaAnalisis?: unknown;
   cronograma: {
     durationMonths: number;
     activities: Array<{

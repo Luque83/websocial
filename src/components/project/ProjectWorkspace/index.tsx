@@ -24,9 +24,17 @@ import {
   ShieldCheck,
   AlertTriangle,
   FileCheck,
-  Clock
+  Paperclip,
+  Upload,
+  Bot,
+  ExternalLink,
+  BookOpen,
+  X
 } from 'lucide-react';
 import { saveProjectWorkspaceAction, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
+import { analyzeConvocatoriaAction } from '@/app/actions/ai-analyzer';
+import { uploadProjectDocumentAction } from '@/app/actions/storage';
+import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
 import styles from './ProjectWorkspace.module.css';
 
 interface ProjectWorkspaceProps {
@@ -53,6 +61,13 @@ export function ProjectWorkspace({
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // AI Modal States
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiInputText, setAiInputText] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<ConvocatoriaAnalysisResult | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Restore existing workspace data or fallback to tool-specific data
   const fullWorkspace = (initialToolsData['project-workspace-full'] as ProjectWorkspaceData) || null;
@@ -113,8 +128,8 @@ export function ProjectWorkspace({
                 description: 'Entrevistas de diagnóstico inicial y diseño del plan de acción', 
                 responsible: 'Trabajador/a Social',
                 evidencias: [
-                  { id: 'ev-1', tipo: 'firmas', descripcion: 'Fichas de acogida y consentimiento firmadas', estado: 'aportada' },
-                  { id: 'ev-2', tipo: 'informe', descripcion: 'Informe de valoración diagnóstica individual', estado: 'validada' }
+                  { id: 'ev-1', tipo: 'firmas', descripcion: 'Fichas de acogida y consentimiento firmadas', estado: 'aportada', archivoNombre: 'fichas_acogida_firmadas.pdf' },
+                  { id: 'ev-2', tipo: 'informe', descripcion: 'Informe de valoración diagnóstica individual', estado: 'validada', archivoNombre: 'informe_diagnostico_inicial.pdf' }
                 ]
               },
               { 
@@ -122,7 +137,7 @@ export function ProjectWorkspace({
                 description: 'Talleres grupales de competencias digitales y búsqueda activa de empleo', 
                 responsible: 'Educador/a Social',
                 evidencias: [
-                  { id: 'ev-3', tipo: 'firmas', descripcion: 'Listados de asistencia diarios con DNI y firma', estado: 'aportada' },
+                  { id: 'ev-3', tipo: 'firmas', descripcion: 'Listados de asistencia diarios con DNI y firma', estado: 'aportada', archivoNombre: 'hojas_firmas_talleres_m1_m3.pdf' },
                   { id: 'ev-4', tipo: 'fotos', descripcion: 'Dossier fotográfico y capturas de sesiones', estado: 'pendiente' }
                 ]
               },
@@ -178,7 +193,7 @@ export function ProjectWorkspace({
     grantAmount: 40000,
   });
 
-  // 1.7 Gastos y Facturas Detalladas
+  // 1.7 Gastos y Facturas Detalladas con Archivos
   const [gastosFacturas, setGastosFacturas] = useState<ProjectWorkspaceData['gastosFacturas']>(() => fullWorkspace?.gastosFacturas || [
     {
       id: 'fac-1',
@@ -192,6 +207,8 @@ export function ProjectWorkspace({
       importeImputado: 1452.00,
       partidaId: 'p-3',
       justificantePago: true,
+      facturaFileName: 'factura_089_formacion.pdf',
+      justificanteFileName: 'justificante_banco_089.pdf'
     },
     {
       id: 'fac-2',
@@ -205,6 +222,8 @@ export function ProjectWorkspace({
       importeImputado: 960.00,
       partidaId: 'p-4',
       justificantePago: true,
+      facturaFileName: 'factura_alquiler_aulas_t1.pdf',
+      justificanteFileName: 'transferencia_alquiler_t1.pdf'
     },
     {
       id: 'fac-3',
@@ -217,7 +236,8 @@ export function ProjectWorkspace({
       pctImputado: 100,
       importeImputado: 350.00,
       partidaId: 'p-3',
-      justificantePago: false, // Alerta
+      justificantePago: false,
+      facturaFileName: 'factura_papeleria_994.pdf'
     }
   ]);
 
@@ -236,7 +256,7 @@ export function ProjectWorkspace({
     setHasChanges(true);
   };
 
-  // 2. REACTIVE CALCULATIONS
+  // 2. FINANCIAL CALCULATIONS
   const directCost = useMemo(() => {
     return presupuesto.partidas.reduce((acc, p) => acc + (p.monthlyAmount * p.months), 0);
   }, [presupuesto.partidas]);
@@ -260,7 +280,7 @@ export function ProjectWorkspace({
 
   // Evidences stats
   const allEvidencias = useMemo(() => {
-    const list: Array<{ id: string; tipo: string; descripcion: string; estado: string }> = [];
+    const list: Array<{ id: string; tipo: string; descripcion: string; estado: string; archivoUrl?: string; archivoNombre?: string }> = [];
     marcoLogico.objectives.forEach(o => {
       o.results.forEach(r => {
         r.activities.forEach(a => {
@@ -278,7 +298,6 @@ export function ProjectWorkspace({
   const auditAlerts = useMemo(() => {
     const alerts: Array<{ type: 'red' | 'yellow' | 'green'; text: string }> = [];
 
-    // Check 1: Invoices without payment proof
     const missingPayments = gastosFacturas.filter(f => !f.justificantePago);
     if (missingPayments.length > 0) {
       alerts.push({
@@ -287,7 +306,6 @@ export function ProjectWorkspace({
       });
     }
 
-    // Check 2: Partidas with severe deviation (>10%)
     const highDevPartidas = presupuesto.partidas.filter(p => {
       const pres = p.monthlyAmount * p.months;
       const real = p.costeReal !== undefined ? p.costeReal : pres;
@@ -300,7 +318,6 @@ export function ProjectWorkspace({
       });
     }
 
-    // Check 3: Activities without evidences
     const pendingEv = allEvidencias.filter(e => e.estado === 'pendiente');
     if (pendingEv.length > 0) {
       alerts.push({
@@ -309,7 +326,6 @@ export function ProjectWorkspace({
       });
     }
 
-    // Check 4: Personnel check
     const overAllocatedWorkers = personal.filter(w => w.weeklyHours > w.maxWeeklyHours);
     if (overAllocatedWorkers.length > 0) {
       alerts.push({
@@ -336,7 +352,75 @@ export function ProjectWorkspace({
     return { level: 'BAJO', class: styles.riskGreen, label: '🟢 RIESGO BAJO (Expediente Conforme)' };
   }, [auditAlerts]);
 
-  // 3. ACTIONS
+  // 3. AI CALL ANALYZER HANDLER (FASE 7)
+  const handleAnalyzeConvocatoria = async () => {
+    if (!aiInputText.trim()) return;
+    setIsAnalyzing(true);
+    try {
+      const res = await analyzeConvocatoriaAction(aiInputText);
+      if (res.success && res.data) {
+        setAnalysisResult(res.data);
+      } else {
+        alert(res.error || 'Error analizando la convocatoria.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error inesperado analizando la convocatoria.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleApplyAIAnalysis = () => {
+    if (!analysisResult) return;
+    setSubvencion(prev => ({
+      ...prev,
+      organismo: analysisResult.organismo || prev.organismo,
+      linea: analysisResult.linea || prev.linea,
+      importeConcedido: analysisResult.importeMaximo || prev.importeConcedido,
+      aportacionPropia: analysisResult.pctCofinanciacionMinima > 0 ? ((analysisResult.importeMaximo * analysisResult.pctCofinanciacionMinima) / 100) : prev.aportacionPropia,
+    }));
+    setPresupuesto(prev => ({
+      ...prev,
+      indirectPct: analysisResult.pctCostesIndirectosMax || prev.indirectPct,
+      grantAmount: analysisResult.importeMaximo || prev.grantAmount,
+    }));
+    setIsAIModalOpen(false);
+    handleModify();
+  };
+
+  // 4. STORAGE FILE UPLOAD HANDLER
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    onUploaded: (fileUrl: string, fileName: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('projectId', projectId);
+      formData.append('category', 'documentos');
+
+      const res = await uploadProjectDocumentAction(formData);
+      if (res.success && res.fileUrl) {
+        onUploaded(res.fileUrl, res.fileName || file.name);
+        handleModify();
+      } else {
+        alert(res.error || 'Error al subir el archivo.');
+      }
+    } catch (err) {
+      console.error('Error subiendo archivo:', err);
+      alert('Error al subir el archivo adjunto.');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  // 5. ACTIONS
   const syncPersonalToBudget = () => {
     const newPersonalPartidas = personal.map(worker => {
       const costeEmpresaMes = worker.monthlySalary * (1 + worker.ssPct / 100);
@@ -422,6 +506,7 @@ export function ProjectWorkspace({
         presupuesto,
         gastosFacturas,
         cronograma,
+        convocatoriaAnalisis: analysisResult,
       };
 
       const result = await saveProjectWorkspaceAction(projectId, fullData);
@@ -619,7 +704,7 @@ export function ProjectWorkspace({
         </button>
       </nav>
 
-      {/* TAB 1: SUBVENCIÓN Y CONVOCATORIA (FASE 3) */}
+      {/* TAB 1: SUBVENCIÓN Y CONVOCATORIA (FASE 3 & FASE 7 IA ANALYZER) */}
       {activeTab === 'subvencion' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
@@ -627,6 +712,14 @@ export function ProjectWorkspace({
               <h2 className={styles.sectionTitle}><Building2 size={20} color="#2563eb" /> 1. Datos Oficiales de la Subvención y Financiador</h2>
               <p className={styles.sectionSubtitle}>Registra la resolución oficial, importes concedidos, fechas de ejecución y plazos de justificación.</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsAIModalOpen(true)}
+              className={styles.saveBtn}
+              style={{ background: '#7c3aed' }}
+            >
+              <Bot size={16} /> Analizar Bases con IA Documental
+            </button>
           </div>
 
           <div className={styles.formGrid2}>
@@ -905,7 +998,7 @@ export function ProjectWorkspace({
                     placeholder="Resultado medible..."
                   />
 
-                  {/* Actividades con Evidencias */}
+                  {/* Actividades con Evidencias y Subida de Archivos */}
                   <div style={{ marginTop: '0.75rem' }}>
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                       Actividades y Evidencias de Ejecución:
@@ -955,21 +1048,48 @@ export function ProjectWorkspace({
                         <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#64748b' }}>Evidencias:</span>
                           {(act.evidencias || []).map((ev, evIdx) => (
-                            <span 
-                              key={ev.id} 
-                              className={`${styles.evidenceTag} ${ev.estado === 'validada' || ev.estado === 'aportada' ? styles.evidenceValid : styles.evidencePending}`}
-                              onClick={() => {
-                                const newObjs = [...marcoLogico.objectives];
-                                const current = newObjs[oIdx].results[rIdx].activities[aIdx].evidencias![evIdx].estado;
-                                newObjs[oIdx].results[rIdx].activities[aIdx].evidencias![evIdx].estado = current === 'validada' ? 'pendiente' : 'validada';
-                                setMarcoLogico({ ...marcoLogico, objectives: newObjs });
-                                handleModify();
-                              }}
-                              style={{ cursor: 'pointer' }}
-                              title="Click para alternar estado (Validada / Pendiente)"
-                            >
-                              {ev.estado === 'validada' ? '✅' : '⏳'} {ev.descripcion} ({ev.tipo})
-                            </span>
+                            <div key={ev.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <span 
+                                className={`${styles.evidenceTag} ${ev.estado === 'validada' || ev.estado === 'aportada' ? styles.evidenceValid : styles.evidencePending}`}
+                                onClick={() => {
+                                  const newObjs = [...marcoLogico.objectives];
+                                  const current = newObjs[oIdx].results[rIdx].activities[aIdx].evidencias![evIdx].estado;
+                                  newObjs[oIdx].results[rIdx].activities[aIdx].evidencias![evIdx].estado = current === 'validada' ? 'pendiente' : 'validada';
+                                  setMarcoLogico({ ...marcoLogico, objectives: newObjs });
+                                  handleModify();
+                                }}
+                                style={{ cursor: 'pointer' }}
+                                title="Click para alternar estado (Validada / Pendiente)"
+                              >
+                                {ev.estado === 'validada' ? '✅' : '⏳'} {ev.descripcion} ({ev.tipo})
+                              </span>
+
+                              {ev.archivoNombre ? (
+                                <a 
+                                  href={ev.archivoUrl || '#'} 
+                                  download={ev.archivoNombre}
+                                  className={styles.fileAttachedBadge}
+                                  title="Descargar documento de evidencia adjunto"
+                                >
+                                  <Paperclip size={10} /> {ev.archivoNombre.slice(0, 15)}...
+                                </a>
+                              ) : (
+                                <label className={styles.fileUploadLabel} title="Subir PDF / Imagen de la evidencia">
+                                  <Upload size={10} /> Subir
+                                  <input 
+                                    type="file" 
+                                    style={{ display: 'none' }} 
+                                    onChange={(e) => handleFileUpload(e, (url, name) => {
+                                      const newObjs = [...marcoLogico.objectives];
+                                      newObjs[oIdx].results[rIdx].activities[aIdx].evidencias![evIdx].archivoUrl = url;
+                                      newObjs[oIdx].results[rIdx].activities[aIdx].evidencias![evIdx].archivoNombre = name;
+                                      newObjs[oIdx].results[rIdx].activities[aIdx].evidencias![evIdx].estado = 'aportada';
+                                      setMarcoLogico({ ...marcoLogico, objectives: newObjs });
+                                    })}
+                                  />
+                                </label>
+                              )}
+                            </div>
                           ))}
                           <button
                             type="button"
@@ -981,7 +1101,7 @@ export function ProjectWorkspace({
                               newObjs[oIdx].results[rIdx].activities[aIdx].evidencias!.push({
                                 id: `ev-${Date.now()}`,
                                 tipo: 'firmas',
-                                descripcion: 'Hoja de firmas de participantes',
+                                descripcion: 'Hojas de firmas y asistencia',
                                 estado: 'pendiente'
                               });
                               setMarcoLogico({ ...marcoLogico, objectives: newObjs });
@@ -1436,13 +1556,13 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 6: GASTOS Y FACTURAS (FASE 4) */}
+      {/* TAB 6: GASTOS Y FACTURAS (FASE 4) CON ADJUNTOS */}
       {activeTab === 'facturas' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Receipt size={20} color="#2563eb" /> 6. Relación Clasificada de Gastos y Facturas</h2>
-              <p className={styles.sectionSubtitle}>Registra cada factura, su porcentaje de imputación a esta subvención y el justificante bancario de pago.</p>
+              <h2 className={styles.sectionTitle}><Receipt size={20} color="#2563eb" /> 6. Relación Clasificada de Gastos, Facturas y Justificantes</h2>
+              <p className={styles.sectionSubtitle}>Registra cada factura, su porcentaje de imputación a esta subvención y adjunta los comprobantes bancarios.</p>
             </div>
           </div>
 
@@ -1456,8 +1576,9 @@ export function ProjectWorkspace({
                   <th>Fecha</th>
                   <th>Concepto</th>
                   <th className={styles.numCol}>Total Factura</th>
-                  <th>% Imputado</th>
+                  <th>% Imp.</th>
                   <th className={styles.numCol}>Imputado Subvención</th>
+                  <th style={{ textAlign: 'center' }}>Adjunto Factura</th>
                   <th style={{ textAlign: 'center' }}>Pago Bancario</th>
                   <th></th>
                 </tr>
@@ -1571,18 +1692,72 @@ export function ProjectWorkspace({
                       {formatCurrency(fac.importeImputado)}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={fac.justificantePago}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          newF[fIdx].justificantePago = e.target.checked;
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                        style={{ width: '18px', height: '18px', accentColor: '#16a34a', cursor: 'pointer' }}
-                        title={fac.justificantePago ? 'Justificante de pago OK' : 'Pendiente de justificante'}
-                      />
+                      {fac.facturaFileName ? (
+                        <a 
+                          href={fac.facturaFileUrl || '#'} 
+                          download={fac.facturaFileName}
+                          className={styles.fileAttachedBadge}
+                          title="Descargar Factura PDF"
+                        >
+                          <Paperclip size={11} /> {fac.facturaFileName.slice(0, 10)}...
+                        </a>
+                      ) : (
+                        <label className={styles.fileUploadLabel}>
+                          <Upload size={11} /> Factura
+                          <input 
+                            type="file" 
+                            style={{ display: 'none' }}
+                            onChange={(e) => handleFileUpload(e, (url, name) => {
+                              const newF = [...gastosFacturas];
+                              newF[fIdx].facturaFileUrl = url;
+                              newF[fIdx].facturaFileName = name;
+                              setGastosFacturas(newF);
+                            })}
+                          />
+                        </label>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={fac.justificantePago}
+                          onChange={e => {
+                            const newF = [...gastosFacturas];
+                            newF[fIdx].justificantePago = e.target.checked;
+                            setGastosFacturas(newF);
+                            handleModify();
+                          }}
+                          style={{ width: '18px', height: '18px', accentColor: '#16a34a', cursor: 'pointer' }}
+                          title={fac.justificantePago ? 'Pago Verificado' : 'Pendiente de Justificante'}
+                        />
+                        {fac.justificanteFileName ? (
+                          <a 
+                            href={fac.justificanteFileUrl || '#'} 
+                            download={fac.justificanteFileName}
+                            className={styles.fileAttachedBadge}
+                            style={{ background: '#dcfce7', color: '#15803d', borderColor: '#86efac' }}
+                            title="Descargar Justificante de Pago"
+                          >
+                            <Paperclip size={10} /> OK
+                          </a>
+                        ) : (
+                          <label className={styles.fileUploadLabel} title="Subir justificante de pago bancario">
+                            <Upload size={10} /> Pago
+                            <input 
+                              type="file" 
+                              style={{ display: 'none' }}
+                              onChange={(e) => handleFileUpload(e, (url, name) => {
+                                const newF = [...gastosFacturas];
+                                newF[fIdx].justificanteFileUrl = url;
+                                newF[fIdx].justificanteFileName = name;
+                                newF[fIdx].justificantePago = true;
+                                setGastosFacturas(newF);
+                              })}
+                            />
+                          </label>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <button
@@ -1769,7 +1944,7 @@ export function ProjectWorkspace({
                             <strong>{act.description}</strong> (Responsable: {act.responsible})
                             {act.evidencias && act.evidencias.length > 0 && (
                               <span style={{ display: 'block', fontSize: '0.8125rem', color: '#475569' }}>
-                                Evidencias aportadas: {act.evidencias.map(e => `${e.descripcion} (${e.estado})`).join(', ')}
+                                Evidencias aportadas: {act.evidencias.map(e => `${e.descripcion} (${e.estado}${e.archivoNombre ? ': ' + e.archivoNombre : ''})`).join(', ')}
                               </span>
                             )}
                           </li>
@@ -1867,6 +2042,144 @@ export function ProjectWorkspace({
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. MODAL: AI CONVOCATORIA ANALYZER (FASE 7) */}
+      {isAIModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalContent}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>
+                <Bot size={22} color="#7c3aed" /> Analizador de Bases y Convocatorias con IA Documental
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setIsAIModalOpen(false)} 
+                className={styles.modalCloseBtn}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {!analysisResult ? (
+                <>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                    Pega aquí el texto de las <strong>bases reguladoras, convocatoria o resolución oficial</strong>.
+                    El auditor de IA extraerá con máxima trazabilidad los límites presupuestarios, gastos permitidos, conceptos no subvencionables y plazos legales.
+                  </p>
+                  <textarea
+                    rows={8}
+                    className={styles.textarea}
+                    placeholder="Pega aquí el texto del Boletín Oficial (BOE, BOJA, BOCM, etc.) o de la resolución..."
+                    value={aiInputText}
+                    onChange={e => setAiInputText(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsAIModalOpen(false)}
+                      className={styles.exportBtn}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAnalyzeConvocatoria}
+                      disabled={isAnalyzing || aiInputText.trim().length < 20}
+                      className={styles.saveBtn}
+                      style={{ background: '#7c3aed' }}
+                    >
+                      {isAnalyzing ? 'Analizando Documento...' : 'Auditar y Extraer Reglas'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className={styles.aiAnalysisResultCard}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong style={{ fontSize: '1rem', color: '#1e1b4b' }}>{analysisResult.linea}</strong>
+                      <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{analysisResult.organismo}</div>
+                    </div>
+                    <span className={styles.aiCitationTag} style={{ background: '#dcfce7', color: '#166534' }}>
+                      Confianza: {analysisResult.confianzaAnalisis}
+                    </span>
+                  </div>
+
+                  <p style={{ fontSize: '0.875rem', color: '#334155', background: '#f1f5f9', padding: '0.75rem', borderRadius: '8px', margin: 0 }}>
+                    {analysisResult.resumenEjecutivo}
+                  </p>
+
+                  <div className={styles.formGrid3}>
+                    <div style={{ background: 'white', padding: '0.65rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.6875rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Importe Máximo</span>
+                      <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e3a8a' }}>{formatCurrency(analysisResult.importeMaximo)}</div>
+                    </div>
+                    <div style={{ background: 'white', padding: '0.65rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.6875rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Costes Indirectos Máx.</span>
+                      <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#2563eb' }}>{analysisResult.pctCostesIndirectosMax}%</div>
+                    </div>
+                    <div style={{ background: 'white', padding: '0.65rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.6875rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Cofinanciación Mín.</span>
+                      <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#16a34a' }}>{analysisResult.pctCofinanciacionMinima}%</div>
+                    </div>
+                  </div>
+
+                  {/* Gastos Subvencionables con Citas */}
+                  <div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
+                      ✅ Gastos Subvencionables y Citas Legales:
+                    </span>
+                    <div className={styles.aiRuleList} style={{ marginTop: '0.35rem' }}>
+                      {analysisResult.gastosElegibles.map((g, idx) => (
+                        <div key={idx} className={styles.aiRuleItem}>
+                          <div>
+                            <strong>{g.concepto}</strong> {g.limite && <span style={{ color: '#64748b' }}>({g.limite})</span>}
+                          </div>
+                          <span className={styles.aiCitationTag}>{g.citaArticulo}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Gastos NO Subvencionables con Citas */}
+                  <div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase' }}>
+                      ❌ Gastos Excluidos / No Elegibles:
+                    </span>
+                    <div className={styles.aiRuleList} style={{ marginTop: '0.35rem' }}>
+                      {analysisResult.gastosNoElegibles.map((g, idx) => (
+                        <div key={idx} className={styles.aiRuleItem} style={{ background: '#fff5f5' }}>
+                          <div>
+                            <strong>{g.concepto}</strong> — <span style={{ color: '#7f1d1d' }}>{g.motivo}</span>
+                          </div>
+                          <span className={styles.aiCitationTag} style={{ background: '#fee2e2', color: '#991b1b' }}>{g.citaArticulo}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAnalysisResult(null)}
+                      className={styles.exportBtn}
+                    >
+                      Analizar Otro Texto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyAIAnalysis}
+                      className={styles.saveBtn}
+                    >
+                      <Check size={16} /> Aplicar Reglas al Expediente
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
