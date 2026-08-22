@@ -313,18 +313,20 @@ export function PersonalMatrixCalculator({
   return (
     <div id="personal-export-target" className={styles.container}>
       {/* Cabecera de la Entidad */}
-      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', padding: '1rem 1.5rem', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ background: '#ffffff', border: '1.5px solid #cbd5e1', padding: '1.25rem 1.5rem', borderRadius: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', boxShadow: '0 4px 16px -2px rgba(13, 58, 95, 0.06)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Building2 size={24} color="#2563eb" />
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#eaf5fb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Building2 size={22} color="#16C7B2" />
+          </div>
           <div>
-            <label htmlFor={`${uid}-org`} style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              Entidad Social / Organización
+            <label htmlFor={`${uid}-org`} style={{ fontSize: '0.75rem', fontWeight: 800, color: '#5C7E9B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Entidad Social / ONG
             </label>
             <input
               id={`${uid}-org`}
               type="text"
               className={styles.input}
-              style={{ fontWeight: 700, fontSize: '1.125rem', padding: '0.25rem 0.5rem', border: '1px solid var(--border-subtle)' }}
+              style={{ fontWeight: 800, fontSize: '1.125rem', padding: '0.35rem 0.65rem', border: '1.5px solid #cbd5e1', color: '#0D3A5F' }}
               value={organizationName}
               onChange={e => setOrganizationName(e.target.value)}
               placeholder="Nombre de la ONG / Entidad"
@@ -332,35 +334,9 @@ export function PersonalMatrixCalculator({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSaveAndSync}
-          disabled={isSaving}
-          style={{
-            backgroundColor: 'var(--color-primary-600)',
-            color: 'white',
-            border: 'none',
-            padding: '0.65rem 1.25rem',
-            borderRadius: '8px',
-            fontWeight: 600,
-            fontSize: '0.875rem',
-            cursor: isSaving ? 'not-allowed' : 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
-          }}
-        >
-          <RefreshCw size={16} className={isSaving ? styles.spinner : ''} />
-          <span>{isSaving ? 'Sincronizando...' : '💾 Guardar y Sincronizar Proyectos'}</span>
-        </button>
-      </div>
-
-      <div className={styles.syncNotice}>
-        <CheckCircle2 size={20} style={{ flexShrink: 0 }} />
-        <span>
-          <strong>Sincronización Bidireccional Activa:</strong> Cualquier trabajador y horas asignadas a un proyecto real se vincularán automáticamente a su presupuesto de costes en la sección de personal.
-        </span>
+        <div className="no-print">
+          <ExportPdfButton targetId="personal-export-target" filename="matriz-imputacion-personal" projectName={organizationName} />
+        </div>
       </div>
 
       {/* Pestañas de Vista */}
@@ -611,20 +587,13 @@ export function PersonalMatrixCalculator({
 
                     return (
                       <div key={alloc.id} className={styles.allocationRow}>
-                        <select
-                          className={styles.select}
-                          value={alloc.projectId || (availableProjects.find(p => p.name === alloc.projectName)?.id || 'sede')}
-                          onChange={e => updateAllocationProject(worker.id, alloc.id, e.target.value)}
-                        >
-                          <optgroup label="Proyectos Creados en WebSocial">
-                            {availableProjects.map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                          </optgroup>
-                          <optgroup label="Estructura General">
-                            <option value="sede">🏢 Sede / Estructura General (No subvencionado)</option>
-                          </optgroup>
-                        </select>
+                        <input
+                          type="text"
+                          className={styles.input}
+                          value={alloc.projectName}
+                          onChange={e => updateAllocationField(worker.id, alloc.id, 'projectName', e.target.value)}
+                          placeholder="Ej: Proyecto Inserción IRPF / Sede"
+                        />
 
                         <input
                           type="number"
@@ -885,31 +854,10 @@ export function PersonalMatrixCalculator({
       <ResultPanel title="Cuadro Oficial de Imputación de Personal (Auditoría)" copyText={copyText}>
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }} className="no-print">
           <ExportPdfButton targetId="personal-export-target" filename="matriz-imputacion-personal" projectName={organizationName} />
-          <button
-            onClick={handleSaveAndSync}
-            disabled={isSaving}
-            style={{
-              backgroundColor: 'var(--color-primary-600)',
-              color: 'white',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '0.5rem',
-              border: 'none',
-              fontWeight: 600,
-              cursor: isSaving ? 'not-allowed' : 'pointer',
-              opacity: isSaving ? 0.7 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <RefreshCw size={16} className={isSaving ? styles.spinner : ''} />
-            <span>{isSaving ? 'Sincronizando...' : '💾 Guardar y Sincronizar Proyectos'}</span>
-          </button>
         </div>
       </ResultPanel>
       <ProjectBridgeBanner 
         toolName="Matriz de Imputación de Personal"
-        onSaveToProject={handleSaveAndSync}
       />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
