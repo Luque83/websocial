@@ -17,7 +17,14 @@ export default async function MatrizImputacionPage() {
     redirect('/login');
   }
 
-  const { workers, projects } = await getGlobalImputationMatrixAction();
+  const matrixPayload = await getGlobalImputationMatrixAction();
 
-  return <GlobalImputationMatrix initialWorkers={workers} projects={projects} />;
+  return (
+    <GlobalImputationMatrix 
+      initialWorkers={matrixPayload.workers} 
+      projects={matrixPayload.projects}
+      initialLifecycleMap={matrixPayload.lifecycleMap}
+      initialStats={matrixPayload.globalStats}
+    />
+  );
 }
