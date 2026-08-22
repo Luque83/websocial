@@ -17,7 +17,8 @@ export function DashboardSidebar({ userEmail, recentProjects }: DashboardSidebar
 
   const navItems = [
     { name: 'Mis Proyectos', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Plantilla y Personal', href: '/herramientas/gestion-personal', icon: Users },
+    { name: 'Equipo y Permisos', href: '/dashboard/equipo', icon: Users },
+    { name: 'Plantilla y Personal', href: '/herramientas/gestion-personal', icon: UserCircle },
     { name: 'Mi Entidad / Perfil', href: '/dashboard/perfil', icon: UserCircle },
     { name: 'Panel Comercial', href: '/dashboard/admin', icon: ShieldCheck },
   ];
