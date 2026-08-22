@@ -30,6 +30,7 @@ interface TramitacionTabProps {
   concedidoAmount: number;
   totalPresupuesto: number;
   beneficiariosDirectos: number;
+  activeViewMode?: 'versiones' | 'subsanaciones' | 'reformulacion';
   formatCurrency: (n: number) => string;
 }
 
@@ -42,9 +43,16 @@ export function TramitacionTab({
   concedidoAmount,
   totalPresupuesto,
   beneficiariosDirectos,
+  activeViewMode = 'versiones',
   formatCurrency,
 }: TramitacionTabProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'versiones' | 'subsanaciones' | 'reformulacion'>('versiones');
+  const [activeSubTab, setActiveSubTab] = useState<'versiones' | 'subsanaciones' | 'reformulacion'>(activeViewMode);
+
+  React.useEffect(() => {
+    if (activeViewMode) {
+      setActiveSubTab(activeViewMode);
+    }
+  }, [activeViewMode]);
   const [snapshotSummary, setSnapshotSummary] = useState('');
   const [selectedVersionType, setSelectedVersionType] = useState<VersionType>('solicitud_presentada');
 

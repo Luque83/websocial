@@ -32,6 +32,11 @@ import {
   UserCheck,
   History,
   Sliders,
+  FolderKanban,
+  Camera,
+  Award,
+  PlayCircle,
+  ClipboardCheck,
   X
 } from 'lucide-react';
 import { saveProjectWorkspaceAction, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
@@ -40,7 +45,7 @@ import { uploadProjectDocumentAction } from '@/app/actions/storage';
 import { getOrgStaffCatalogAction } from '@/app/actions/personal';
 import { DEFAULT_STAFF_CATALOG, type Worker as OrgWorker } from '@/config/staff';
 import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
-import { GrantLifecycleNav } from '@/components/project/GrantLifecycleNav';
+import { GrantLifecycleNav, type LifecyclePhase } from '@/components/project/GrantLifecycleNav';
 import { TramitacionTab } from '@/components/project/tabs/TramitacionTab';
 import { IncidenciasTab } from '@/components/project/tabs/IncidenciasTab';
 import { AuditoriaTab } from '@/components/project/tabs/AuditoriaTab';
@@ -78,16 +83,33 @@ export function ProjectWorkspace({
   initialProject,
   initialToolsData,
 }: ProjectWorkspaceProps) {
-  // 1. STATE INITIALIZATION
-  const [activeTab, setActiveTab] = useState<'subvencion' | 'diagnostico' | 'marcoLogico' | 'personal' | 'presupuesto' | 'tramitacion' | 'facturas' | 'incidencias' | 'cronograma' | 'auditoria'>('subvencion');
+  // 1. STATE INITIALIZATION - TWO-TIER LIFECYCLE NAVIGATION
+  const [activePhase, setActivePhase] = useState<LifecyclePhase>('solicitud');
+  const [activeSubTab, setActiveSubTab] = useState<string>('convocatoria');
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Grant Lifecycle States (Fase 8)
-  const [lifecycleStage, setLifecycleStage] = useState<GrantLifecycleStage>('en_ejecucion');
+  const [lifecycleStage, setLifecycleStage] = useState<GrantLifecycleStage>('borrador');
   const [versions, setVersions] = useState<ProjectVersion[]>([]);
+  const [cierreData, setCierreData] = useState<{
+    resolucionNum: string;
+    fechaResolucion: string;
+    importeLiquidado: number;
+    saldoFinal: number;
+    estadoCierre: 'conforme' | 'reintegro' | 'alegaciones';
+    resolucionDocUrl?: string;
+    resolucionDocName?: string;
+  }>({
+    resolucionNum: 'RES-2026/LIQ-044',
+    fechaResolucion: '2026-12-15',
+    importeLiquidado: 40000,
+    saldoFinal: 0,
+    estadoCierre: 'conforme',
+    resolucionDocName: 'resolucion_liquidacion_definitiva_firmada.pdf'
+  });
   const [requirements, setRequirements] = useState<RequirementItem[]>([
     {
       id: 'req-init-1',
@@ -781,10 +803,28 @@ export function ProjectWorkspace({
     });
   }, [subvencion, diagnostico, marcoLogico, personal, presupuesto, gastosFacturas, requirements, incidents, analysisResult]);
 
-  const handleStageChange = async (newStage: GrantLifecycleStage) => {
-    setLifecycleStage(newStage);
+  const handlePhaseChange = async (phase: LifecyclePhase) => {
+    setActivePhase(phase);
+    if (phase === 'solicitud') {
+      setActiveSubTab('convocatoria');
+      setLifecycleStage('solicitado');
+    } else if (phase === 'subsanacion') {
+      setActiveSubTab('requerimientos');
+      setLifecycleStage('subsanacion');
+    } else if (phase === 'reformulacion') {
+      setActiveSubTab('comparador');
+      setLifecycleStage('reformulacion');
+    } else if (phase === 'ejecucion') {
+      setActiveSubTab('nominas');
+      setLifecycleStage('en_ejecucion');
+    } else if (phase === 'justificacion') {
+      setActiveSubTab('auditor_preventivo');
+      setLifecycleStage('en_justificacion');
+    } else if (phase === 'cierre') {
+      setActiveSubTab('resolucion_cierre');
+      setLifecycleStage('cerrado');
+    }
     setHasChanges(true);
-    await saveProjectGrantLifecycleAction(projectId, { stage: newStage });
   };
 
   const handleRequestSnapshot = async (versionType: VersionType, summary: string) => {
@@ -857,112 +897,227 @@ export function ProjectWorkspace({
         </div>
       </header>
 
-      {/* 2. GRANT LIFECYCLE STEPPER BAR (FASE 8) */}
+      {/* 2. PRIMARY LIFECYCLE PHASE NAVIGATION BAR */}
       <GrantLifecycleNav
-        currentStage={lifecycleStage}
-        onStageChange={handleStageChange}
+        currentPhase={activePhase}
+        onPhaseChange={handlePhaseChange}
         auditScore={auditScore}
         auditErrorCount={auditIssues.length}
-        onOpenAuditor={() => setActiveTab('auditoria')}
+        onOpenAuditor={() => {
+          setActivePhase('justificacion');
+          setActiveSubTab('auditor_preventivo');
+        }}
       />
 
-      {/* 3. TABS NAVIGATION */}
+      {/* 3. CONTEXTUAL SUB-MENU BAR (Renders ONLY sub-tabs belonging to activePhase) */}
       <nav className={styles.tabNav}>
-        <button
-          type="button"
-          onClick={() => setActiveTab('subvencion')}
-          className={`${styles.tabBtn} ${activeTab === 'subvencion' ? styles.tabActive : ''}`}
-        >
-          <Building2 size={16} />
-          <span>1. Convocatoria & Bases</span>
-          <span className={styles.tabBadge}>{subvencion.estadoSubvencion}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('diagnostico')}
-          className={`${styles.tabBtn} ${activeTab === 'diagnostico' ? styles.tabActive : ''}`}
-        >
-          <FileText size={16} />
-          <span>2. Diagnóstico</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('marcoLogico')}
-          className={`${styles.tabBtn} ${activeTab === 'marcoLogico' ? styles.tabActive : ''}`}
-        >
-          <Target size={16} />
-          <span>3. Marco Lógico</span>
-          <span className={styles.tabBadge}>{marcoLogico.objectives.length} obj</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('personal')}
-          className={`${styles.tabBtn} ${activeTab === 'personal' ? styles.tabActive : ''}`}
-        >
-          <Users size={16} />
-          <span>4. Personal</span>
-          <span className={styles.tabBadge}>{personal.length}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('presupuesto')}
-          className={`${styles.tabBtn} ${activeTab === 'presupuesto' ? styles.tabActive : ''}`}
-        >
-          <Calculator size={16} />
-          <span>5. Presupuesto</span>
-          <span className={styles.tabBadge}>{formatCurrency(totalPresupuesto)}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('tramitacion')}
-          className={`${styles.tabBtn} ${activeTab === 'tramitacion' ? styles.tabActive : ''}`}
-        >
-          <History size={16} color="#0D3A5F" />
-          <span>6. Tramitación & Subsanaciones</span>
-          <span className={styles.tabBadge} style={{ background: requirements.some(r => r.status === 'pendiente') ? '#FEE2E2' : '#EAF5FB', color: requirements.some(r => r.status === 'pendiente') ? '#DC2626' : '#0D3A5F' }}>
-            {requirements.filter(r => r.status === 'pendiente').length > 0 ? `⚠️ ${requirements.filter(r => r.status === 'pendiente').length}` : `${versions.length} vers.`}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('facturas')}
-          className={`${styles.tabBtn} ${activeTab === 'facturas' ? styles.tabActive : ''}`}
-        >
-          <Receipt size={16} />
-          <span>7. Facturas & Gastos</span>
-          <span className={styles.tabBadge}>{gastosFacturas.length}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('incidencias')}
-          className={`${styles.tabBtn} ${activeTab === 'incidencias' ? styles.tabActive : ''}`}
-        >
-          <AlertTriangle size={16} color="#EA580C" />
-          <span>8. Incidencias</span>
-          <span className={styles.tabBadge}>{incidents.length}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('cronograma')}
-          className={`${styles.tabBtn} ${activeTab === 'cronograma' ? styles.tabActive : ''}`}
-        >
-          <Calendar size={16} />
-          <span>9. Cronograma</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('auditoria')}
-          className={`${styles.tabBtn} ${activeTab === 'auditoria' ? styles.tabActive : ''}`}
-        >
-          <ShieldCheck size={16} color="#16C7B2" />
-          <span style={{ color: activeTab === 'auditoria' ? '#16C7B2' : 'inherit', fontWeight: 800 }}>
-            10. Auditoría & Justificación
-          </span>
-        </button>
+        {activePhase === 'solicitud' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('convocatoria')}
+              className={`${styles.tabBtn} ${activeSubTab === 'convocatoria' ? styles.tabActive : ''}`}
+            >
+              <Building2 size={15} />
+              <span>1.1 Convocatoria & Bases (IA)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('diagnostico')}
+              className={`${styles.tabBtn} ${activeSubTab === 'diagnostico' ? styles.tabActive : ''}`}
+            >
+              <FileText size={15} />
+              <span>1.2 Diagnóstico & Colectivo</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('marcoLogico')}
+              className={`${styles.tabBtn} ${activeSubTab === 'marcoLogico' ? styles.tabActive : ''}`}
+            >
+              <Target size={15} />
+              <span>1.3 Marco Lógico & Actividades</span>
+              <span className={styles.tabBadge}>{marcoLogico.objectives.length} obj</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('personal')}
+              className={`${styles.tabBtn} ${activeSubTab === 'personal' ? styles.tabActive : ''}`}
+            >
+              <Users size={15} />
+              <span>1.4 Plantilla & Personal Estimado</span>
+              <span className={styles.tabBadge}>{personal.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('presupuesto')}
+              className={`${styles.tabBtn} ${activeSubTab === 'presupuesto' ? styles.tabActive : ''}`}
+            >
+              <Calculator size={15} />
+              <span>1.5 Presupuesto & Cofinanciación</span>
+              <span className={styles.tabBadge}>{formatCurrency(totalPresupuesto)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('cronograma')}
+              className={`${styles.tabBtn} ${activeSubTab === 'cronograma' ? styles.tabActive : ''}`}
+            >
+              <Calendar size={15} />
+              <span>1.6 Cronograma Gantt</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('snapshot_solicitud')}
+              className={`${styles.tabBtn} ${activeSubTab === 'snapshot_solicitud' ? styles.tabActive : ''}`}
+            >
+              <Camera size={15} />
+              <span>1.7 Registrar Solicitud (V1)</span>
+              <span className={styles.tabBadge}>{versions.filter(v => v.versionType === 'solicitud_presentada').length}</span>
+            </button>
+          </>
+        )}
+
+        {activePhase === 'subsanacion' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('requerimientos')}
+              className={`${styles.tabBtn} ${activeSubTab === 'requerimientos' ? styles.tabActive : ''}`}
+            >
+              <AlertCircle size={15} />
+              <span>2.1 Requerimientos Notificados (10 Días)</span>
+              <span className={styles.tabBadge} style={{ background: requirements.some(r => r.status === 'pendiente') ? '#FEE2E2' : '#EAF5FB', color: requirements.some(r => r.status === 'pendiente') ? '#DC2626' : '#0D3A5F' }}>
+                {requirements.filter(r => r.status === 'pendiente').length > 0 ? `⚠️ ${requirements.filter(r => r.status === 'pendiente').length}` : `${requirements.length}`}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('boveda_subsanar')}
+              className={`${styles.tabBtn} ${activeSubTab === 'boveda_subsanar' ? styles.tabActive : ''}`}
+            >
+              <FolderKanban size={15} />
+              <span>2.2 Documentos a Subsanar (Bóveda)</span>
+            </button>
+          </>
+        )}
+
+        {activePhase === 'reformulacion' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('comparador')}
+              className={`${styles.tabBtn} ${activeSubTab === 'comparador' ? styles.tabActive : ''}`}
+            >
+              <Sliders size={15} />
+              <span>3.1 Comparador Solicitado vs. Concedido (Diff)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('baseline_v2')}
+              className={`${styles.tabBtn} ${activeSubTab === 'baseline_v2' ? styles.tabActive : ''}`}
+            >
+              <Award size={15} />
+              <span>3.2 Fijar Baseline Autorizada (V2)</span>
+              <span className={styles.tabBadge}>{versions.filter(v => v.versionType === 'reformulacion').length}</span>
+            </button>
+          </>
+        )}
+
+        {activePhase === 'ejecucion' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('nominas')}
+              className={`${styles.tabBtn} ${activeSubTab === 'nominas' ? styles.tabActive : ''}`}
+            >
+              <Users size={15} />
+              <span>4.1 Nóminas Mensuales (Recibos, Pagos SEPA, RLC)</span>
+              <span className={styles.tabBadge}>{nominasMensuales.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('facturas')}
+              className={`${styles.tabBtn} ${activeSubTab === 'facturas' ? styles.tabActive : ''}`}
+            >
+              <Receipt size={15} />
+              <span>4.2 Facturas de Proveedores & Pagos Bancarios</span>
+              <span className={styles.tabBadge}>{gastosFacturas.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('actividades_evidencias')}
+              className={`${styles.tabBtn} ${activeSubTab === 'actividades_evidencias' ? styles.tabActive : ''}`}
+            >
+              <CheckCircle2 size={15} />
+              <span>4.3 Seguimiento de Actividades & Hojas de Firmas</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('incidencias')}
+              className={`${styles.tabBtn} ${activeSubTab === 'incidencias' ? styles.tabActive : ''}`}
+            >
+              <AlertTriangle size={15} color="#EA580C" />
+              <span>4.4 Incidencias, Bajas IT y Modificaciones</span>
+              <span className={styles.tabBadge}>{incidents.length}</span>
+            </button>
+          </>
+        )}
+
+        {activePhase === 'justificacion' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('auditor_preventivo')}
+              className={`${styles.tabBtn} ${activeSubTab === 'auditor_preventivo' ? styles.tabActive : ''}`}
+            >
+              <ShieldCheck size={15} color="#16C7B2" />
+              <span>5.1 Auditor de Coherencia Preventivo</span>
+              <span className={styles.tabBadge} style={{ background: auditScore >= 85 ? '#DCFCE7' : '#FEE2E2', color: auditScore >= 85 ? '#166534' : '#991B1B' }}>
+                {auditScore}/100
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('cuenta_justificativa')}
+              className={`${styles.tabBtn} ${activeSubTab === 'cuenta_justificativa' ? styles.tabActive : ''}`}
+            >
+              <Calculator size={15} />
+              <span>5.2 Cuenta Justificativa de Gastos (Liquidación)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('memoria_tecnica')}
+              className={`${styles.tabBtn} ${activeSubTab === 'memoria_tecnica' ? styles.tabActive : ''}`}
+            >
+              <FileText size={15} />
+              <span>5.3 Memoria Técnica y de Actividades Oficial</span>
+            </button>
+          </>
+        )}
+
+        {activePhase === 'cierre' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('resolucion_cierre')}
+              className={`${styles.tabBtn} ${activeSubTab === 'resolucion_cierre' ? styles.tabActive : ''}`}
+            >
+              <Award size={15} />
+              <span>6.1 Resolución de Liquidación Definitiva</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('archivo_custodia')}
+              className={`${styles.tabBtn} ${activeSubTab === 'archivo_custodia' ? styles.tabActive : ''}`}
+            >
+              <FolderKanban size={15} />
+              <span>6.2 Archivo y Custodia del Expediente (4 Años)</span>
+            </button>
+          </>
+        )}
       </nav>
 
-      {/* TAB 1: SUBVENCIÓN Y CONVOCATORIA (FASE 3 & FASE 7 IA ANALYZER) */}
-      {activeTab === 'subvencion' && (
+      {/* 1.1 SUBVENCIÓN Y CONVOCATORIA (FASE 1) */}
+      {activePhase === 'solicitud' && activeSubTab === 'convocatoria' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <div>
@@ -1107,8 +1262,8 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 2: DIAGNÓSTICO Y COLECTIVOS */}
-      {activeTab === 'diagnostico' && (
+      {/* 1.2 DIAGNÓSTICO Y COLECTIVOS */}
+      {activePhase === 'solicitud' && activeSubTab === 'diagnostico' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <div>
@@ -1190,8 +1345,8 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 3: MARCO LÓGICO Y EVIDENCIAS (FASE 5) */}
-      {activeTab === 'marcoLogico' && (
+      {/* 1.3 / 4.3: MARCO LÓGICO Y EVIDENCIAS */}
+      {((activePhase === 'solicitud' && activeSubTab === 'marcoLogico') || (activePhase === 'ejecucion' && activeSubTab === 'actividades_evidencias')) && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <div>
@@ -1479,8 +1634,8 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 4: PERSONAL E IMPUTACIONES */}
-      {activeTab === 'personal' && (
+      {/* 1.4 / 4.1: PERSONAL Y NÓMINAS */}
+      {((activePhase === 'solicitud' && activeSubTab === 'personal') || (activePhase === 'ejecucion' && activeSubTab === 'nominas')) && (
         <div className={styles.contentCard}>
           <datalist id="staff-catalog-datalist">
             {staffCatalog.map(w => (
@@ -2024,8 +2179,8 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 5: PRESUPUESTO */}
-      {activeTab === 'presupuesto' && (
+      {/* 1.5: PRESUPUESTO Y COFINANCIACIÓN */}
+      {activePhase === 'solicitud' && activeSubTab === 'presupuesto' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <div>
@@ -2220,8 +2375,8 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 6: GASTOS Y FACTURAS (FASE 4) CON ADJUNTOS */}
-      {activeTab === 'facturas' && (
+      {/* 4.2: GASTOS Y FACTURAS (FASE 4) */}
+      {activePhase === 'ejecucion' && activeSubTab === 'facturas' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <div>
@@ -2469,8 +2624,8 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 7: CRONOGRAMA */}
-      {activeTab === 'cronograma' && (
+      {/* 1.6: CRONOGRAMA GANTT */}
+      {activePhase === 'solicitud' && activeSubTab === 'cronograma' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <div>
@@ -2535,8 +2690,10 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 6: TRAMITACIÓN ADMINISTRATIVA, VERSIONES Y SUBSANACIONES (FASE 8) */}
-      {activeTab === 'tramitacion' && (
+      {/* 1.7 / 2.1 / 3.1: TRAMITACIÓN, SNAPSHOTS Y REFORMULACIÓN */}
+      {((activePhase === 'solicitud' && activeSubTab === 'snapshot_solicitud') || 
+        (activePhase === 'subsanacion' && activeSubTab === 'requerimientos') || 
+        (activePhase === 'reformulacion')) && (
         <TramitacionTab
           versions={versions}
           requirements={requirements}
@@ -2546,12 +2703,65 @@ export function ProjectWorkspace({
           concedidoAmount={subvencion.importeConcedido || 0}
           totalPresupuesto={totalPresupuesto}
           beneficiariosDirectos={diagnostico.beneficiariesDirect || 0}
+          activeViewMode={activePhase === 'subsanacion' ? 'subsanaciones' : activePhase === 'reformulacion' ? 'reformulacion' : 'versiones'}
           formatCurrency={formatCurrency}
         />
       )}
 
-      {/* TAB 8: GESTOR DE INCIDENCIAS Y MODIFICACIONES (FASE 8) */}
-      {activeTab === 'incidencias' && (
+      {/* 2.2: DOCUMENTOS DESDE BÓVEDA PARA SUBSANACIÓN */}
+      {activePhase === 'subsanacion' && activeSubTab === 'boveda_subsanar' && (
+        <div className={styles.contentCard}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <h2 className={styles.sectionTitle}><FolderKanban size={20} color="#2563eb" /> 2.2 Bóveda de Documentos Institucionales</h2>
+              <p className={styles.sectionSubtitle}>Selecciona y descarga los documentos oficiales de la entidad para adjuntarlos a tu escrito de subsanación.</p>
+            </div>
+            <Link
+              href="/dashboard/documentos"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: '#0D3A5F',
+                color: 'white',
+                padding: '0.45rem 0.95rem',
+                borderRadius: '8px',
+                fontSize: '0.8125rem',
+                fontWeight: 700,
+                textDecoration: 'none'
+              }}
+            >
+              <ExternalLink size={14} /> Ir a la Bóveda General
+            </Link>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <strong style={{ color: '#0D3A5F', fontSize: '0.875rem' }}>📄 Poderes y Representación Legal</strong>
+              <p style={{ fontSize: '0.75rem', color: '#64748B', margin: '0.35rem 0 0.75rem 0' }}>Escritura notarial de apoderamiento y DNI del representante legal.</p>
+              <span style={{ fontSize: '0.6875rem', background: '#DCFCE7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>✓ En Vigor</span>
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <strong style={{ color: '#0D3A5F', fontSize: '0.875rem' }}>📑 Certificado AEAT (Hacienda)</strong>
+              <p style={{ fontSize: '0.75rem', color: '#64748B', margin: '0.35rem 0 0.75rem 0' }}>Certificado positivo de estar al corriente de obligaciones tributarias.</p>
+              <span style={{ fontSize: '0.6875rem', background: '#DCFCE7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>✓ En Vigor (Vence 2026-09-01)</span>
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <strong style={{ color: '#0D3A5F', fontSize: '0.875rem' }}>📑 Certificado TGSS (Seguridad Social)</strong>
+              <p style={{ fontSize: '0.75rem', color: '#64748B', margin: '0.35rem 0 0.75rem 0' }}>Certificado positivo de no tener deudas con la Seguridad Social.</p>
+              <span style={{ fontSize: '0.6875rem', background: '#DCFCE7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>✓ En Vigor (Vence 2026-09-01)</span>
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <strong style={{ color: '#0D3A5F', fontSize: '0.875rem' }}>🏛️ Estatutos e Inscripción Registral</strong>
+              <p style={{ fontSize: '0.75rem', color: '#64748B', margin: '0.35rem 0 0.75rem 0' }}>Estatutos registrados y certificado de inscripción en el Registro de Asociaciones / Fundaciones.</p>
+              <span style={{ fontSize: '0.6875rem', background: '#DCFCE7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>✓ En Vigor</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4.4: GESTOR DE INCIDENCIAS Y MODIFICACIONES */}
+      {activePhase === 'ejecucion' && activeSubTab === 'incidencias' && (
         <IncidenciasTab
           incidents={incidents}
           onUpdateIncidents={handleUpdateIncidents}
@@ -2559,8 +2769,8 @@ export function ProjectWorkspace({
         />
       )}
 
-      {/* TAB 10: AUDITORÍA DE COHERENCIA Y JUSTIFICACIÓN OFICIAL (FASE 8) */}
-      {activeTab === 'auditoria' && (
+      {/* 5.1 / 5.2 / 5.3: AUDITORÍA DE COHERENCIA Y JUSTIFICACIÓN OFICIAL */}
+      {activePhase === 'justificacion' && (
         <AuditoriaTab
           auditScore={auditScore}
           auditIssues={auditIssues}
@@ -2607,6 +2817,76 @@ export function ProjectWorkspace({
           nominasMensuales={nominasMensuales}
           formatCurrency={formatCurrency}
         />
+      )}
+
+      {/* 6.1 / 6.2: CIERRE Y LIQUIDACIÓN DEFINITIVA */}
+      {activePhase === 'cierre' && (
+        <div className={styles.contentCard}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <h2 className={styles.sectionTitle}><CheckCircle2 size={20} color="#16a34a" /> 6. Cierre, Liquidación Definitiva y Archivo Legal</h2>
+              <p className={styles.sectionSubtitle}>Registro de la resolución de liquidación emitida por el órgano concedente y protocolo de custodia durante el plazo legal de prescripción (4 años, Art. 39 Ley General de Subvenciones).</p>
+            </div>
+            <span style={{ background: '#DCFCE7', color: '#166534', padding: '0.4rem 0.85rem', borderRadius: '8px', fontWeight: 800, fontSize: '0.8125rem', border: '1px solid #86EFAC' }}>
+              ✓ Expediente Conforme y Liquidado
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>Resolución de Cierre</span>
+              <input
+                type="text"
+                className={styles.input}
+                style={{ marginTop: '0.4rem' }}
+                value={cierreData.resolucionNum}
+                onChange={e => { setCierreData({ ...cierreData, resolucionNum: e.target.value }); handleModify(); }}
+              />
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>Fecha de Liquidación</span>
+              <input
+                type="date"
+                className={styles.input}
+                style={{ marginTop: '0.4rem' }}
+                value={cierreData.fechaResolucion}
+                onChange={e => { setCierreData({ ...cierreData, fechaResolucion: e.target.value }); handleModify(); }}
+              />
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>Importe Liquidado</span>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0D3A5F', marginTop: '0.4rem' }}>
+                {formatCurrency(subvencion.importeConcedido || 0)}
+              </div>
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>Saldo / Reintegro</span>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#166534', marginTop: '0.4rem' }}>
+                0,00 € (0% Reintegro)
+              </div>
+            </div>
+          </div>
+
+          <div style={{ background: '#F0FDFA', border: '1.5px solid #99F6E4', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', color: '#0F766E', fontSize: '0.9375rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <FolderKanban size={18} color="#0D9488" /> Protocolo de Custodia Legal Digitalizada (2026 - 2030)
+            </h3>
+            <p style={{ fontSize: '0.8125rem', color: '#115E59', margin: '0 0 0.75rem 0' }}>
+              Conforme a la Ley 38/2003, la entidad debe conservar todos los originales y justificantes bancarios durante 4 años ante posibles auditorías del Tribunal de Cuentas o Intervención General.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ background: 'white', border: '1px solid #99F6E4', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#0F766E' }}>
+                ✓ {versions.length} Snapshots Inmutables Archivados
+              </span>
+              <span style={{ background: 'white', border: '1px solid #99F6E4', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#0F766E' }}>
+                ✓ {nominasMensuales.length} Nóminas y Transferencias SEPA
+              </span>
+              <span style={{ background: 'white', border: '1px solid #99F6E4', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#0F766E' }}>
+                ✓ {gastosFacturas.length} Facturas con Justificante Bancario
+              </span>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 4. MODAL: AI CONVOCATORIA ANALYZER (FASE 7) */}
