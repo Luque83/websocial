@@ -80,6 +80,18 @@ interface AuditoriaTabProps {
     importeImputado: number;
     justificantePago: boolean;
   }>;
+  nominasMensuales?: Array<{
+    id: string;
+    workerName: string;
+    role: string;
+    periodoMes: string;
+    salarioBruto: number;
+    ssPatronal: number;
+    costeEmpresaTotal: number;
+    pctImputado: number;
+    importeImputado: number;
+    justificantePago: boolean;
+  }>;
   formatCurrency: (n: number) => string;
 }
 
@@ -93,12 +105,15 @@ export function AuditoriaTab({
   personal,
   presupuesto,
   gastosFacturas,
+  nominasMensuales = [],
   formatCurrency,
 }: AuditoriaTabProps) {
   const [copied, setCopied] = useState(false);
   const [activeReport, setActiveReport] = useState<'auditor' | 'cuenta_justificativa' | 'memoria_tecnica'>('auditor');
 
-  const totalGastoImputado = gastosFacturas.reduce((acc, f) => acc + (f.importeImputado || 0), 0);
+  const totalNominas = nominasMensuales.reduce((acc, n) => acc + (n.importeImputado || 0), 0);
+  const totalFacturas = gastosFacturas.reduce((acc, f) => acc + (f.importeImputado || 0), 0);
+  const totalGastoImputado = totalNominas + totalFacturas;
   const totalConcedido = subvencion.importeConcedido || 0;
   const desviacionGasto = totalGastoImputado - totalConcedido;
 
@@ -274,8 +289,63 @@ export function AuditoriaTab({
             </div>
           </div>
 
+          {/* A. Nóminas y Personal */}
+          {nominasMensuales.length > 0 && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0D3A5F', margin: '1rem 0 0.5rem 0' }}>
+                A. Relación Justificativa de Nóminas y Seguridad Social del Personal:
+              </h4>
+              <div className={styles.tableWrapper}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Trabajador/a</th>
+                      <th>Mes</th>
+                      <th className={styles.numCol}>Bruto</th>
+                      <th className={styles.numCol}>SS Patronal</th>
+                      <th className={styles.numCol}>Coste Empresa</th>
+                      <th className={styles.numCol}>% Imp.</th>
+                      <th className={styles.numCol}>Imputado Subvención</th>
+                      <th>Pago Bancario</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nominasMensuales.map(nom => (
+                      <tr key={nom.id}>
+                        <td><strong>{nom.workerName}</strong> ({nom.role})</td>
+                        <td>{nom.periodoMes}</td>
+                        <td className={styles.numCol}>{formatCurrency(nom.salarioBruto)}</td>
+                        <td className={styles.numCol}>{formatCurrency(nom.ssPatronal)}</td>
+                        <td className={styles.numCol}>{formatCurrency(nom.costeEmpresaTotal)}</td>
+                        <td className={styles.numCol}>{nom.pctImputado}%</td>
+                        <td className={styles.numCol} style={{ fontWeight: 800, color: '#0D3A5F' }}>{formatCurrency(nom.importeImputado)}</td>
+                        <td>
+                          {nom.justificantePago ? (
+                            <span style={{ color: '#166534', fontWeight: 700, fontSize: '0.75rem', background: '#DCFCE7', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                              ✓ Acreditado SEPA
+                            </span>
+                          ) : (
+                            <span style={{ color: '#991B1B', fontWeight: 700, fontSize: '0.75rem', background: '#FEE2E2', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                              ⏳ Pendiente Justificante
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr style={{ background: '#f8fafc', fontWeight: 800 }}>
+                      <td colSpan={6}>TOTAL GASTO PERSONAL IMPUTADO</td>
+                      <td className={styles.numCol} style={{ color: '#0D3A5F' }}>{formatCurrency(totalNominas)}</td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* B. Facturas y Proveedores */}
           <h4 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0D3A5F', margin: '1rem 0 0.5rem 0' }}>
-            Relación Clasificada de Documentos de Gasto y Pagos Bancarios:
+            B. Relación Clasificada de Facturas de Actividades y Suministros:
           </h4>
           <div className={styles.tableWrapper}>
             <table className={styles.table}>

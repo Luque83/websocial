@@ -432,20 +432,47 @@ export function TramitacionTab({
       {activeSubTab === 'reformulacion' && (
         <div>
           <div style={{ background: '#F0FDFA', border: '1.5px solid #99F6E4', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.25rem' }}>
-            <h3 style={{ margin: '0 0 0.4rem 0', color: '#0F766E', fontSize: '0.9375rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Sliders size={18} color="#0D9488" /> Comparador Técnico-Económico de Reformulación
-            </h3>
-            <p style={{ fontSize: '0.8125rem', color: '#115E59', margin: 0 }}>
-              La reformulación adapta los compromisos cuando la cuantía concedida es menor a la solicitada. Nunca reduce linealmente sin evaluar la viabilidad de las actividades.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 style={{ margin: '0 0 0.4rem 0', color: '#0F766E', fontSize: '0.9375rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Sliders size={18} color="#0D9488" /> Comparador Técnico-Económico de Reformulación
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: '#115E59', margin: 0 }}>
+                  La reformulación adapta los compromisos cuando la cuantía concedida es menor a la solicitada. No reduce linealmente sin evaluar la viabilidad de las actividades.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onRequestSnapshot('reformulacion', `Reformulación aprobada para cuantía concedida de ${formatCurrency(concedidoAmount)} (${beneficiariosDirectos} beneficiarios)`);
+                }}
+                style={{
+                  background: '#0D3A5F',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1.15rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  boxShadow: '0 2px 8px rgba(13, 58, 95, 0.25)'
+                }}
+              >
+                <Camera size={15} color="#16C7B2" /> 💾 Fijar como Baseline Autorizada (V2)
+              </button>
+            </div>
           </div>
 
           <table className={styles.diffTable}>
             <thead>
               <tr>
                 <th>Magnitud del Proyecto</th>
-                <th className={styles.numCol}>Solicitado Original</th>
-                <th className={styles.numCol}>Concedido / Reformulado</th>
+                <th className={styles.numCol}>Solicitado Original (V1)</th>
+                <th className={styles.numCol}>Concedido / Reformulado (V2)</th>
                 <th className={styles.numCol}>Variación</th>
                 <th>Impacto Recomendado por la IA</th>
               </tr>
@@ -484,7 +511,7 @@ export function TramitacionTab({
                 <td className={`${styles.numCol} ${styles.diffNeutral}`}>0 € (0%)</td>
                 <td>
                   <span style={{ fontSize: '0.75rem', color: '#475569' }}>
-                    Ajusta las partidas en la pestaña 4 (Presupuesto) para reflejar la reformulación exacta.
+                    Ajusta las partidas en la pestaña 5 (Presupuesto) para reflejar la reformulación exacta.
                   </span>
                 </td>
               </tr>

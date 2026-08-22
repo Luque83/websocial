@@ -108,6 +108,25 @@ export interface ProjectWorkspaceData {
     justificanteFileUrl?: string;
     justificanteFileName?: string;
   }>;
+  nominasMensuales?: Array<{
+    id: string;
+    workerId?: string;
+    workerName: string;
+    role: string;
+    periodoMes: string;
+    salarioBruto: number;
+    ssPatronal: number;
+    costeEmpresaTotal: number;
+    pctImputado: number;
+    importeImputado: number;
+    justificantePago: boolean;
+    reciboNominaUrl?: string;
+    reciboNominaName?: string;
+    justificantePagoUrl?: string;
+    justificantePagoName?: string;
+    rlcDocUrl?: string;
+    rlcDocName?: string;
+  }>;
   convocatoriaAnalisis?: unknown;
   cronograma: {
     durationMonths: number;

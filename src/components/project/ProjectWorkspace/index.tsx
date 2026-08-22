@@ -261,6 +261,59 @@ export function ProjectWorkspace({
     }
   ]);
 
+  // 1.5.1 Nóminas Mensuales Detalladas (Ejecución Real)
+  const [activePersonalSubTab, setActivePersonalSubTab] = useState<'prevision' | 'nominas_mensuales'>('prevision');
+  const [nominasMensuales, setNominasMensuales] = useState<NonNullable<ProjectWorkspaceData['nominasMensuales']>>(() => fullWorkspace?.nominasMensuales || [
+    {
+      id: 'nom-1',
+      workerId: 'pers-1',
+      workerName: 'Elena Gómez',
+      role: 'Trabajadora Social / Coordinadora',
+      periodoMes: '2026-01',
+      salarioBruto: 2100,
+      ssPatronal: 659.40,
+      costeEmpresaTotal: 2759.40,
+      pctImputado: 53.33,
+      importeImputado: 1471.68,
+      justificantePago: true,
+      reciboNominaName: 'nomina_enero_2026_elena.pdf',
+      justificantePagoName: 'transferencia_sueldo_enero_elena.pdf',
+      rlcDocName: 'rlc_enero_2026_tgss.pdf',
+    },
+    {
+      id: 'nom-2',
+      workerId: 'pers-1',
+      workerName: 'Elena Gómez',
+      role: 'Trabajadora Social / Coordinadora',
+      periodoMes: '2026-02',
+      salarioBruto: 2100,
+      ssPatronal: 659.40,
+      costeEmpresaTotal: 2759.40,
+      pctImputado: 53.33,
+      importeImputado: 1471.68,
+      justificantePago: true,
+      reciboNominaName: 'nomina_febrero_2026_elena.pdf',
+      justificantePagoName: 'transferencia_sueldo_febrero_elena.pdf',
+      rlcDocName: 'rlc_febrero_2026_tgss.pdf',
+    },
+    {
+      id: 'nom-3',
+      workerId: 'pers-2',
+      workerName: 'Carlos Ruiz',
+      role: 'Educador Social',
+      periodoMes: '2026-01',
+      salarioBruto: 1850,
+      ssPatronal: 580.90,
+      costeEmpresaTotal: 2430.90,
+      pctImputado: 50.00,
+      importeImputado: 1215.45,
+      justificantePago: true,
+      reciboNominaName: 'nomina_enero_2026_carlos.pdf',
+      justificantePagoName: 'transferencia_sueldo_enero_carlos.pdf',
+      rlcDocName: 'rlc_enero_2026_tgss.pdf',
+    }
+  ]);
+
   // 1.6 Presupuesto
   const [presupuesto, setPresupuesto] = useState<ProjectWorkspaceData['presupuesto']>(() => fullWorkspace?.presupuesto || initialCostes || {
     partidas: [
@@ -599,6 +652,41 @@ export function ProjectWorkspace({
     document.body.removeChild(link);
   };
 
+  const generateMonthlyPayrollsFromStaff = () => {
+    const months = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'];
+    const generated: typeof nominasMensuales = [];
+
+    personal.forEach(w => {
+      const numMonths = Math.min(w.months || 12, 12);
+      const ssAmount = Number((w.monthlySalary * (w.ssPct / 100)).toFixed(2));
+      const totalCosteEmpresa = Number((w.monthlySalary + ssAmount).toFixed(2));
+      const pct = w.maxWeeklyHours > 0 ? (w.weeklyHours / w.maxWeeklyHours) * 100 : 100;
+      const imputedAmount = Number(((totalCosteEmpresa * pct) / 100).toFixed(2));
+
+      for (let i = 0; i < numMonths; i++) {
+        generated.push({
+          id: `nom-${w.id}-${i + 1}`,
+          workerId: w.id,
+          workerName: w.name,
+          role: w.role,
+          periodoMes: months[i],
+          salarioBruto: w.monthlySalary,
+          ssPatronal: ssAmount,
+          costeEmpresaTotal: totalCosteEmpresa,
+          pctImputado: Number(pct.toFixed(2)),
+          importeImputado: imputedAmount,
+          justificantePago: false,
+        });
+      }
+    });
+
+    if (generated.length > 0) {
+      setNominasMensuales(generated);
+      setActivePersonalSubTab('nominas_mensuales');
+      setHasChanges(true);
+    }
+  };
+
   const handleSaveAll = async () => {
     setIsSaving(true);
     try {
@@ -610,6 +698,7 @@ export function ProjectWorkspace({
         personal,
         presupuesto,
         gastosFacturas,
+        nominasMensuales,
         cronograma,
         convocatoriaAnalisis: analysisResult,
       };
@@ -1403,8 +1492,8 @@ export function ProjectWorkspace({
 
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Users size={20} color="#2563eb" /> 4. Personal y Horas Imputadas a la Subvención</h2>
-              <p className={styles.sectionSubtitle}>Asigna las nóminas, jornada semanal y meses de dedicación a este proyecto. Puedes importar los trabajadores reales de la plantilla de tu entidad con sus salarios brutos.</p>
+              <h2 className={styles.sectionTitle}><Users size={20} color="#2563eb" /> 4. Personal, Plantilla y Nóminas Mensuales</h2>
+              <p className={styles.sectionSubtitle}>Gestiona la previsión de plantilla asignada y registra los gastos de nóminas mes a mes con sus justificantes de pago bancario y Seguridad Social.</p>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button
@@ -1440,275 +1529,498 @@ export function ProjectWorkspace({
             </div>
           </div>
 
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th style={{ minWidth: '220px' }}>Nombre del Trabajador/a</th>
-                  <th>Categoría / Puesto</th>
-                  <th>Bruto / Mes (€)</th>
-                  <th>SS Patronal (%)</th>
-                  <th>Horas/sem</th>
-                  <th>Meses</th>
-                  <th className={styles.numCol}>Coste Imputado / Mes</th>
-                  <th className={styles.numCol}>Total Imputado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {personal.map((worker, idx) => {
-                  const costeEmpresaMes = worker.monthlySalary * (1 + worker.ssPct / 100);
-                  const pct = worker.maxWeeklyHours > 0 ? (worker.weeklyHours / worker.maxWeeklyHours) : 1;
-                  const costeMesImputado = costeEmpresaMes * pct;
-                  const costeTotal = costeMesImputado * (worker.months || 12);
-                  const isOverLimit = worker.weeklyHours > worker.maxWeeklyHours;
-
-                  return (
-                    <tr key={worker.id} style={{ background: isOverLimit ? '#fef2f2' : 'inherit' }}>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                          <input
-                            type="text"
-                            list="staff-catalog-datalist"
-                            className={styles.input}
-                            placeholder="Nombre o busca en plantilla..."
-                            value={worker.name}
-                            onChange={e => {
-                              const val = e.target.value;
-                              const matched = staffCatalog.find(w => w.name.toLowerCase() === val.toLowerCase());
-                              const newP = [...personal];
-                              if (matched) {
-                                newP[idx] = {
-                                  ...newP[idx],
-                                  name: matched.name,
-                                  role: matched.role || newP[idx].role,
-                                  monthlySalary: matched.salaryMonthly || newP[idx].monthlySalary,
-                                  ssPct: matched.ssPct || newP[idx].ssPct,
-                                  maxWeeklyHours: matched.maxWeeklyHours || newP[idx].maxWeeklyHours,
-                                };
-                              } else {
-                                newP[idx].name = val;
-                              }
-                              setPersonal(newP);
-                              handleModify();
-                            }}
-                          />
-                          <select
-                            style={{
-                              fontSize: '0.75rem',
-                              padding: '0.25rem 0.5rem',
-                              borderRadius: '6px',
-                              border: '1.5px solid #D5ECF8',
-                              background: '#EAF5FB',
-                              color: '#0D3A5F',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                            value=""
-                            onChange={e => {
-                              const found = staffCatalog.find(w => w.id === e.target.value);
-                              if (found) {
-                                const newP = [...personal];
-                                newP[idx] = {
-                                  ...newP[idx],
-                                  name: found.name,
-                                  role: found.role,
-                                  monthlySalary: found.salaryMonthly,
-                                  ssPct: found.ssPct || 31.4,
-                                  maxWeeklyHours: found.maxWeeklyHours || 37.5,
-                                };
-                                setPersonal(newP);
-                                handleModify();
-                              }
-                            }}
-                          >
-                            <option value="">⚡ Cargar datos de plantilla...</option>
-                            {staffCatalog.map(w => (
-                              <option key={w.id} value={w.id}>
-                                {w.name} · {w.role} ({w.salaryMonthly} €/m)
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className={styles.input}
-                          value={worker.role}
-                          onChange={e => {
-                            const newP = [...personal];
-                            newP[idx].role = e.target.value;
-                            setPersonal(newP);
-                            handleModify();
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className={styles.input}
-                          style={{ width: '90px' }}
-                          value={worker.monthlySalary}
-                          onChange={e => {
-                            const newP = [...personal];
-                            newP[idx].monthlySalary = parseFloat(e.target.value) || 0;
-                            setPersonal(newP);
-                            handleModify();
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className={styles.input}
-                          style={{ width: '70px' }}
-                          value={worker.ssPct}
-                          onChange={e => {
-                            const newP = [...personal];
-                            newP[idx].ssPct = parseFloat(e.target.value) || 0;
-                            setPersonal(newP);
-                            handleModify();
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className={styles.input}
-                          style={{ width: '75px', borderColor: isOverLimit ? '#dc2626' : 'inherit' }}
-                          value={worker.weeklyHours}
-                          onChange={e => {
-                            const newP = [...personal];
-                            newP[idx].weeklyHours = parseFloat(e.target.value) || 0;
-                            setPersonal(newP);
-                            handleModify();
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className={styles.input}
-                          style={{ width: '65px' }}
-                          value={worker.months}
-                          onChange={e => {
-                            const newP = [...personal];
-                            newP[idx].months = parseInt(e.target.value) || 0;
-                            setPersonal(newP);
-                            handleModify();
-                          }}
-                        />
-                      </td>
-                      <td className={styles.numCol}>
-                        <strong>{formatCurrency(costeMesImputado)}</strong>
-                      </td>
-                      <td className={styles.numCol} style={{ color: '#1e3a8a', fontWeight: 800 }}>
-                        {formatCurrency(costeTotal)}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPersonal(personal.filter(p => p.id !== worker.id));
-                            handleModify();
-                          }}
-                          className={styles.deleteIconBtn}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem' }}>
+          {/* Sub-tabs selector for Personal */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '2px solid #E2E8F0', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => {
-                setPersonal([
-                  ...personal,
-                  {
-                    id: `pers-${Date.now()}`,
-                    name: '',
-                    role: 'Técnico de Proyecto',
-                    contractType: 'Temporal',
-                    monthlySalary: 1800,
-                    ssPct: 31.4,
-                    weeklyHours: 37.5,
-                    maxWeeklyHours: 37.5,
-                    months: 12,
-                  }
-                ]);
-                handleModify();
-              }}
-              className={styles.addSmallBtn}
-            >
-              <Plus size={16} /> Añadir Fila Manual
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedStaffIds(staffCatalog.map(w => w.id));
-                setIsImportStaffModalOpen(true);
-              }}
+              onClick={() => setActivePersonalSubTab('prevision')}
               style={{
-                background: '#EAF5FB',
-                color: '#0D3A5F',
-                border: '1.5px solid #D5ECF8',
                 padding: '0.45rem 1rem',
                 borderRadius: '8px',
+                border: 'none',
+                background: activePersonalSubTab === 'prevision' ? '#0D3A5F' : '#EAF5FB',
+                color: activePersonalSubTab === 'prevision' ? '#ffffff' : '#0D3A5F',
+                fontWeight: 800,
                 fontSize: '0.8125rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem'
+                cursor: 'pointer'
               }}
             >
-              <UserCheck size={16} color="#16C7B2" /> Ver y Seleccionar de la Plantilla Oficial
+              👥 4A. Previsión Anual y Plantilla Asignada ({personal.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePersonalSubTab('nominas_mensuales')}
+              style={{
+                padding: '0.45rem 1rem',
+                borderRadius: '8px',
+                border: 'none',
+                background: activePersonalSubTab === 'nominas_mensuales' ? '#0D3A5F' : '#EAF5FB',
+                color: activePersonalSubTab === 'nominas_mensuales' ? '#ffffff' : '#0D3A5F',
+                fontWeight: 800,
+                fontSize: '0.8125rem',
+                cursor: 'pointer'
+              }}
+            >
+              📑 4B. Registro Mensual de Nóminas Ejecutadas ({nominasMensuales.length})
             </button>
           </div>
 
-          {/* SIMULADOR DE BAJAS IT Y SUSTITUCIONES (HERRAMIENTA INTEGRADA) */}
-          <div style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1', borderLeft: '5px solid #0d3a5f', borderRadius: '12px', padding: '1.25rem 1.5rem', marginTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0d3a5f', margin: '0 0 0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <ShieldCheck size={18} color="#009e96" /> Calculadora de Sustituciones y Bajas Médicas (IT)
-            </h3>
-            <p style={{ fontSize: '0.8125rem', color: '#5c7e9b', margin: '0 0 1rem 0' }}>
-              Simula el coste de sustitución imputable en caso de incapacidad temporal o permiso de maternidad/paternidad para justificar el gasto salarial sustitutorio.
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setPersonal([
-                    ...personal,
-                    {
-                      id: `pers-it-${Date.now()}`,
-                      name: 'Sustituto/a (Baja IT)',
-                      role: 'Técnico Sustituto IT',
-                      contractType: 'Interinidad / Sustitución',
-                      monthlySalary: 1750,
-                      ssPct: 31.4,
-                      weeklyHours: 20,
-                      maxWeeklyHours: 37.5,
-                      months: 3,
-                    }
-                  ]);
-                  handleModify();
-                }}
-                className={styles.exportBtn}
-                style={{ fontSize: '0.8125rem', borderColor: '#16c7b2', color: '#0d3a5f', background: 'white' }}
-              >
-                ➕ Añadir Contrato de Sustitución IT al Proyecto
-              </button>
+          {/* 4A: PREVISIÓN ANUAL */}
+          {activePersonalSubTab === 'prevision' && (
+            <div>
+              <div className={styles.tableWrapper}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={{ minWidth: '220px' }}>Nombre del Trabajador/a</th>
+                      <th>Categoría / Puesto</th>
+                      <th>Bruto / Mes (€)</th>
+                      <th>SS Patronal (%)</th>
+                      <th>Horas/sem</th>
+                      <th>Meses</th>
+                      <th className={styles.numCol}>Coste Imputado / Mes</th>
+                      <th className={styles.numCol}>Total Imputado</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {personal.map((worker, idx) => {
+                      const costeEmpresaMes = worker.monthlySalary * (1 + worker.ssPct / 100);
+                      const pct = worker.maxWeeklyHours > 0 ? (worker.weeklyHours / worker.maxWeeklyHours) : 1;
+                      const costeMesImputado = costeEmpresaMes * pct;
+                      const costeTotal = costeMesImputado * (worker.months || 12);
+                      const isOverLimit = worker.weeklyHours > worker.maxWeeklyHours;
+
+                      return (
+                        <tr key={worker.id} style={{ background: isOverLimit ? '#fef2f2' : 'inherit' }}>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <input
+                                type="text"
+                                list="staff-catalog-datalist"
+                                className={styles.input}
+                                placeholder="Nombre o busca en plantilla..."
+                                value={worker.name}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  const matched = staffCatalog.find(w => w.name.toLowerCase() === val.toLowerCase());
+                                  const newP = [...personal];
+                                  if (matched) {
+                                    newP[idx] = {
+                                      ...newP[idx],
+                                      name: matched.name,
+                                      role: matched.role || newP[idx].role,
+                                      monthlySalary: matched.salaryMonthly || newP[idx].monthlySalary,
+                                      ssPct: matched.ssPct || newP[idx].ssPct,
+                                      maxWeeklyHours: matched.maxWeeklyHours || newP[idx].maxWeeklyHours,
+                                    };
+                                  } else {
+                                    newP[idx].name = val;
+                                  }
+                                  setPersonal(newP);
+                                  handleModify();
+                                }}
+                              />
+                              <select
+                                style={{
+                                  fontSize: '0.75rem',
+                                  padding: '0.25rem 0.5rem',
+                                  borderRadius: '6px',
+                                  border: '1.5px solid #D5ECF8',
+                                  background: '#EAF5FB',
+                                  color: '#0D3A5F',
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                                value=""
+                                onChange={e => {
+                                  const found = staffCatalog.find(w => w.id === e.target.value);
+                                  if (found) {
+                                    const newP = [...personal];
+                                    newP[idx] = {
+                                      ...newP[idx],
+                                      name: found.name,
+                                      role: found.role,
+                                      monthlySalary: found.salaryMonthly,
+                                      ssPct: found.ssPct || 31.4,
+                                      maxWeeklyHours: found.maxWeeklyHours || 37.5,
+                                    };
+                                    setPersonal(newP);
+                                    handleModify();
+                                  }
+                                }}
+                              >
+                                <option value="">⚡ Cargar datos de plantilla...</option>
+                                {staffCatalog.map(w => (
+                                  <option key={w.id} value={w.id}>
+                                    {w.name} · {w.role} ({w.salaryMonthly} €/m)
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className={styles.input}
+                              value={worker.role}
+                              onChange={e => {
+                                const newP = [...personal];
+                                newP[idx].role = e.target.value;
+                                setPersonal(newP);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              className={styles.input}
+                              style={{ width: '90px' }}
+                              value={worker.monthlySalary}
+                              onChange={e => {
+                                const newP = [...personal];
+                                newP[idx].monthlySalary = parseFloat(e.target.value) || 0;
+                                setPersonal(newP);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.1"
+                              className={styles.input}
+                              style={{ width: '75px' }}
+                              value={worker.ssPct}
+                              onChange={e => {
+                                const newP = [...personal];
+                                newP[idx].ssPct = parseFloat(e.target.value) || 0;
+                                setPersonal(newP);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              className={styles.input}
+                              style={{ width: '75px', borderColor: isOverLimit ? '#dc2626' : 'inherit' }}
+                              value={worker.weeklyHours}
+                              onChange={e => {
+                                const newP = [...personal];
+                                newP[idx].weeklyHours = parseFloat(e.target.value) || 0;
+                                setPersonal(newP);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              className={styles.input}
+                              style={{ width: '65px' }}
+                              value={worker.months}
+                              onChange={e => {
+                                const newP = [...personal];
+                                newP[idx].months = parseInt(e.target.value) || 0;
+                                setPersonal(newP);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td className={styles.numCol}>
+                            <strong>{formatCurrency(costeMesImputado)}</strong>
+                          </td>
+                          <td className={styles.numCol} style={{ color: '#1e3a8a', fontWeight: 800 }}>
+                            {formatCurrency(costeTotal)}
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPersonal(personal.filter(p => p.id !== worker.id));
+                                handleModify();
+                              }}
+                              className={styles.deleteIconBtn}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPersonal([
+                      ...personal,
+                      {
+                        id: `pers-${Date.now()}`,
+                        name: '',
+                        role: 'Técnico de Proyecto',
+                        contractType: 'Temporal',
+                        monthlySalary: 1800,
+                        ssPct: 31.4,
+                        weeklyHours: 37.5,
+                        maxWeeklyHours: 37.5,
+                        months: 12,
+                      }
+                    ]);
+                    handleModify();
+                  }}
+                  className={styles.addSmallBtn}
+                >
+                  <Plus size={16} /> Añadir Fila Manual
+                </button>
+
+                <button
+                  type="button"
+                  onClick={generateMonthlyPayrollsFromStaff}
+                  style={{
+                    background: '#0D3A5F',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8125rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  ⚡ Generar las Nóminas Mensuales desde la Plantilla ({personal.length} trabajadores)
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* 4B: REGISTRO MENSUAL DE NÓMINAS */}
+          {activePersonalSubTab === 'nominas_mensuales' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <span style={{ fontSize: '0.875rem', color: '#475569', fontWeight: 600 }}>
+                  Registro mensual de nóminas reales, cálculo de coste empresa y archivo de justificantes SEPA y Seguros Sociales.
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const firstW = personal[0];
+                    setNominasMensuales([
+                      ...nominasMensuales,
+                      {
+                        id: `nom-${Date.now()}`,
+                        workerId: firstW?.id,
+                        workerName: firstW?.name || 'Trabajador/a',
+                        role: firstW?.role || 'Técnico/a',
+                        periodoMes: '2026-01',
+                        salarioBruto: firstW?.monthlySalary || 1800,
+                        ssPatronal: Number(((firstW?.monthlySalary || 1800) * 0.314).toFixed(2)),
+                        costeEmpresaTotal: Number(((firstW?.monthlySalary || 1800) * 1.314).toFixed(2)),
+                        pctImputado: 50,
+                        importeImputado: Number((((firstW?.monthlySalary || 1800) * 1.314) * 0.5).toFixed(2)),
+                        justificantePago: false,
+                      }
+                    ]);
+                    handleModify();
+                  }}
+                  className={styles.addSmallBtn}
+                >
+                  <Plus size={14} /> Registrar Nómina Manual
+                </button>
+              </div>
+
+              <div className={styles.tableWrapper}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Trabajador/a</th>
+                      <th>Mes</th>
+                      <th className={styles.numCol}>Bruto (€)</th>
+                      <th className={styles.numCol}>SS Patronal (€)</th>
+                      <th className={styles.numCol}>Coste Empresa</th>
+                      <th className={styles.numCol}>% Imp.</th>
+                      <th className={styles.numCol}>Imputado Subvención</th>
+                      <th>Documentación y Comprobantes</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nominasMensuales.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#64748B' }}>
+                          No hay nóminas mensuales registradas. Pulsa en <em>"Generar las Nóminas Mensuales desde la Plantilla"</em> para precargar los 12 meses.
+                        </td>
+                      </tr>
+                    ) : (
+                      nominasMensuales.map((nom, nIdx) => (
+                        <tr key={nom.id}>
+                          <td>
+                            <strong>{nom.workerName}</strong>
+                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{nom.role}</div>
+                          </td>
+                          <td>
+                            <input
+                              type="month"
+                              className={styles.input}
+                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem', width: '130px' }}
+                              value={nom.periodoMes}
+                              onChange={e => {
+                                const updated = [...nominasMensuales];
+                                updated[nIdx].periodoMes = e.target.value;
+                                setNominasMensuales(updated);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td className={styles.numCol}>
+                            <input
+                              type="number"
+                              className={styles.input}
+                              style={{ width: '80px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                              value={nom.salarioBruto}
+                              onChange={e => {
+                                const bruto = parseFloat(e.target.value) || 0;
+                                const updated = [...nominasMensuales];
+                                updated[nIdx].salarioBruto = bruto;
+                                updated[nIdx].costeEmpresaTotal = Number((bruto + updated[nIdx].ssPatronal).toFixed(2));
+                                updated[nIdx].importeImputado = Number(((updated[nIdx].costeEmpresaTotal * updated[nIdx].pctImputado) / 100).toFixed(2));
+                                setNominasMensuales(updated);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td className={styles.numCol}>
+                            <input
+                              type="number"
+                              className={styles.input}
+                              style={{ width: '75px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                              value={nom.ssPatronal}
+                              onChange={e => {
+                                const ss = parseFloat(e.target.value) || 0;
+                                const updated = [...nominasMensuales];
+                                updated[nIdx].ssPatronal = ss;
+                                updated[nIdx].costeEmpresaTotal = Number((updated[nIdx].salarioBruto + ss).toFixed(2));
+                                updated[nIdx].importeImputado = Number(((updated[nIdx].costeEmpresaTotal * updated[nIdx].pctImputado) / 100).toFixed(2));
+                                setNominasMensuales(updated);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td className={styles.numCol}>
+                            <strong>{formatCurrency(nom.costeEmpresaTotal)}</strong>
+                          </td>
+                          <td className={styles.numCol}>
+                            <input
+                              type="number"
+                              className={styles.input}
+                              style={{ width: '60px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                              value={nom.pctImputado}
+                              onChange={e => {
+                                const pct = parseFloat(e.target.value) || 0;
+                                const updated = [...nominasMensuales];
+                                updated[nIdx].pctImputado = pct;
+                                updated[nIdx].importeImputado = Number(((updated[nIdx].costeEmpresaTotal * pct) / 100).toFixed(2));
+                                setNominasMensuales(updated);
+                                handleModify();
+                              }}
+                            />
+                          </td>
+                          <td className={styles.numCol} style={{ fontWeight: 800, color: '#0D3A5F' }}>
+                            {formatCurrency(nom.importeImputado)}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                              {/* 1. Recibo de Nómina */}
+                              {nom.reciboNominaName ? (
+                                <span className={styles.fileAttachedBadge}>📄 Nómina</span>
+                              ) : (
+                                <label className={styles.fileUploadLabel}>
+                                  <Upload size={11} /> Nómina PDF
+                                  <input
+                                    type="file"
+                                    accept=".pdf"
+                                    style={{ display: 'none' }}
+                                    onChange={e => handleFileUpload(e, (url, name) => {
+                                      const updated = [...nominasMensuales];
+                                      updated[nIdx].reciboNominaUrl = url;
+                                      updated[nIdx].reciboNominaName = name;
+                                      setNominasMensuales(updated);
+                                    })}
+                                  />
+                                </label>
+                              )}
+
+                              {/* 2. Justificante de Pago Salario SEPA */}
+                              {nom.justificantePagoName ? (
+                                <span className={styles.fileAttachedBadge} style={{ background: '#DCFCE7', color: '#166534', borderColor: '#86EFAC' }}>🏦 Pago SEPA</span>
+                              ) : (
+                                <label className={styles.fileUploadLabel}>
+                                  <Upload size={11} /> Pago Banco
+                                  <input
+                                    type="file"
+                                    accept=".pdf"
+                                    style={{ display: 'none' }}
+                                    onChange={e => handleFileUpload(e, (url, name) => {
+                                      const updated = [...nominasMensuales];
+                                      updated[nIdx].justificantePagoUrl = url;
+                                      updated[nIdx].justificantePagoName = name;
+                                      updated[nIdx].justificantePago = true;
+                                      setNominasMensuales(updated);
+                                    })}
+                                  />
+                                </label>
+                              )}
+
+                              {/* 3. Documento RLC / RNT */}
+                              {nom.rlcDocName ? (
+                                <span className={styles.fileAttachedBadge} style={{ background: '#E0E7FF', color: '#3730A3', borderColor: '#A5B4FC' }}>📑 RLC/RNT</span>
+                              ) : (
+                                <label className={styles.fileUploadLabel}>
+                                  <Upload size={11} /> RLC SS
+                                  <input
+                                    type="file"
+                                    accept=".pdf"
+                                    style={{ display: 'none' }}
+                                    onChange={e => handleFileUpload(e, (url, name) => {
+                                      const updated = [...nominasMensuales];
+                                      updated[nIdx].rlcDocUrl = url;
+                                      updated[nIdx].rlcDocName = name;
+                                      setNominasMensuales(updated);
+                                    })}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNominasMensuales(nominasMensuales.filter(n => n.id !== nom.id));
+                                handleModify();
+                              }}
+                              className={styles.deleteIconBtn}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2292,6 +2604,7 @@ export function ProjectWorkspace({
             }))
           }}
           gastosFacturas={gastosFacturas}
+          nominasMensuales={nominasMensuales}
           formatCurrency={formatCurrency}
         />
       )}
