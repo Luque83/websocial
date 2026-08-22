@@ -86,7 +86,7 @@ export async function deleteProject(projectId: string) {
 export async function getDashboardStats() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { totalProjects: 0, toolsUsed: 0, activeProjects: 0 };
+  if (!user) return { totalProjects: 0, toolsUsed: 8, activeProjects: 0 };
 
   // Proyectos del usuario
   const { data: projects } = await supabase
@@ -96,15 +96,9 @@ export async function getDashboardStats() {
 
   const projectIds = (projects || []).map(p => p.id);
   
-  if (projectIds.length === 0) return { totalProjects: 0, toolsUsed: 0, activeProjects: 0 };
+  if (projectIds.length === 0) return { totalProjects: 0, toolsUsed: 8, activeProjects: 0 };
 
-  // Herramientas usadas en total
-  const { count: toolsUsed } = await supabase
-    .from('project_tools')
-    .select('id', { count: 'exact' })
-    .in('project_id', projectIds);
-
-  // Proyectos con al menos 1 herramienta
+  // Proyectos con datos guardados
   const { data: activeToolData } = await supabase
     .from('project_tools')
     .select('project_id')
@@ -114,8 +108,8 @@ export async function getDashboardStats() {
 
   return {
     totalProjects: projectIds.length,
-    toolsUsed: toolsUsed || 0,
-    activeProjects: activeProjectIds.size,
+    toolsUsed: 8, // 8 Módulos integrados del Expediente Digital
+    activeProjects: activeProjectIds.size || projectIds.length,
   };
 }
 
@@ -130,8 +124,14 @@ export async function getProjectsWithStats() {
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false });
 
-  return (projects || []).map(p => ({
-    ...p,
-    toolsCount: (p.project_tools as { tool_slug: string }[] | null)?.length || 0,
-  }));
+  return (projects || []).map(p => {
+    const hasFullWorkspace = (p.project_tools as { tool_slug: string }[] | null)?.some(
+      t => t.tool_slug === 'project-workspace-full' || t.tool_slug === 'marco-logico'
+    );
+    return {
+      ...p,
+      hasSavedData: Boolean(hasFullWorkspace),
+      statusLabel: hasFullWorkspace ? 'Expediente en Gestión Activa' : 'Listo para Formular',
+    };
+  });
 }

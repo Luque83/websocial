@@ -138,8 +138,8 @@ export default async function DashboardPage() {
             <Wrench size={24} />
           </div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Herramientas Vinculadas</span>
-            <span className={styles.statValue}>{stats.toolsUsed}</span>
+            <span className={styles.statLabel}>Módulos Integrados</span>
+            <span className={styles.statValue}>8 / 8</span>
           </div>
         </Card>
         
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
             <ShieldCheck size={24} />
           </div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Proyectos en Ejecución</span>
+            <span className={styles.statLabel}>Expedientes en Ejecución</span>
             <span className={styles.statValue}>{stats.activeProjects}</span>
           </div>
         </Card>
@@ -175,19 +175,26 @@ export default async function DashboardPage() {
                         <p className={styles.projectDesc}>{project.description}</p>
                       )}
                       
-                      <div style={{ marginTop: 'auto' }}>
-                        <div className={styles.progressBar}>
-                          <div 
-                            className={styles.progressFill} 
-                            style={{ width: `${Math.min((project.toolsCount / totalTools) * 100, 100)}%` }}
-                          />
-                        </div>
-                        <div className={styles.toolsProgress}>
-                          {project.toolsCount} de {totalTools} módulos activos
-                        </div>
-                        <div className={styles.projectMeta}>
-                          <Calendar size={14} />
-                          <span>{new Date(project.created_at).toLocaleDateString('es-ES')}</span>
+                      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '9999px',
+                            background: project.hasSavedData ? '#dcfce7' : '#eff6ff',
+                            color: project.hasSavedData ? '#166534' : '#1d4ed8',
+                            border: `1px solid ${project.hasSavedData ? '#86efac' : '#bfdbfe'}`
+                          }}>
+                            {project.hasSavedData ? '🟢 Expediente Activo' : '📝 Listo para Formular'}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <Calendar size={12} />
+                            {new Date(project.created_at).toLocaleDateString('es-ES')}
+                          </span>
                         </div>
                       </div>
                     </Card>
