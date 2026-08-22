@@ -363,12 +363,16 @@ export function ProjectWorkspace({
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await extractTextFromPdfAction(formData);
-      if (!res.success || !res.text) {
-        alert(res.error || 'No se pudo procesar el archivo PDF');
+      const res = await fetch('/api/extract-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!data.success || !data.text) {
+        alert(data.error || 'No se pudo procesar el archivo PDF');
       } else {
-        setAiInputText(res.text);
-        setPdfUploadedName(`${res.fileName || file.name} (${res.numPages || 1} pág.)`);
+        setAiInputText(data.text);
+        setPdfUploadedName(`${data.fileName || file.name} (${data.numPages || 1} pág.)`);
       }
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Error al procesar el archivo');

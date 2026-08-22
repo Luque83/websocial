@@ -93,12 +93,16 @@ export function CreateAIProjectModal() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await extractTextFromPdfAction(formData);
-      if (!res.success || !res.text) {
-        setError(res.error || 'No se pudo procesar el archivo PDF');
+      const res = await fetch('/api/extract-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!data.success || !data.text) {
+        setError(data.error || 'No se pudo procesar el archivo PDF');
       } else {
-        setConvocatoriaText(res.text);
-        setUploadedPdfInfo({ name: res.fileName || file.name, pages: res.numPages || 1 });
+        setConvocatoriaText(data.text);
+        setUploadedPdfInfo({ name: data.fileName || file.name, pages: data.numPages || 1 });
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al procesar el archivo');
