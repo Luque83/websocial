@@ -34,6 +34,7 @@ import {
 import { saveProjectWorkspaceAction, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
 import { analyzeConvocatoriaAction } from '@/app/actions/ai-analyzer';
 import { uploadProjectDocumentAction } from '@/app/actions/storage';
+import { extractTextFromPdfAction } from '@/app/actions/pdf-extractor';
 import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
 import styles from './ProjectWorkspace.module.css';
 
@@ -68,6 +69,8 @@ export function ProjectWorkspace({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<ConvocatoriaAnalysisResult | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isExtractingPdf, setIsExtractingPdf] = useState(false);
+  const [pdfUploadedName, setPdfUploadedName] = useState<string | null>(null);
 
   // Restore existing workspace data or fallback to tool-specific data
   const fullWorkspace = (initialToolsData['project-workspace-full'] as ProjectWorkspaceData) || null;
@@ -353,6 +356,27 @@ export function ProjectWorkspace({
   }, [auditAlerts]);
 
   // 3. AI CALL ANALYZER HANDLER (FASE 7)
+  const handleWorkspacePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsExtractingPdf(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await extractTextFromPdfAction(formData);
+      if (!res.success || !res.text) {
+        alert(res.error || 'No se pudo procesar el archivo PDF');
+      } else {
+        setAiInputText(res.text);
+        setPdfUploadedName(`${res.fileName || file.name} (${res.numPages || 1} pág.)`);
+      }
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Error al procesar el archivo');
+    } finally {
+      setIsExtractingPdf(false);
+    }
+  };
+
   const handleAnalyzeConvocatoria = async () => {
     if (!aiInputText.trim()) return;
     setIsAnalyzing(true);
@@ -2168,13 +2192,87 @@ export function ProjectWorkspace({
               {!analysisResult ? (
                 <>
                   <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    Pega aquí el texto de las <strong>bases reguladoras, convocatoria o resolución oficial</strong>.
+                    Sube el archivo <strong>PDF de las bases o convocatoria</strong> o pega el texto directamente.
                     El auditor de IA extraerá con máxima trazabilidad los límites presupuestarios, gastos permitidos, conceptos no subvencionables y plazos legales.
                   </p>
+
+                  {/* ZONA DE SUBIDA DE PDF */}
+                  <div style={{
+                    border: '2px dashed #c4b5fd',
+                    background: '#f5f3ff',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginTop: '0.5rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#6b21a8', fontWeight: 700, fontSize: '0.9375rem' }}>
+                      <Upload size={20} color="#7c3aed" />
+                      <span>Subir Documento PDF de las Bases Oficiales / BOE</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.8125rem', color: '#7c3aed' }}>
+                      Extrae automáticamente las reglas de justificación, límites de costes indirectos y cofinanciación desde el archivo oficial.
+                    </p>
+
+                    <label style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      background: '#7c3aed',
+                      color: 'white',
+                      padding: '0.5rem 1.25rem',
+                      borderRadius: '8px',
+                      fontSize: '0.875rem',
+                      fontWeight: 700,
+                      cursor: isExtractingPdf ? 'not-allowed' : 'pointer',
+                      marginTop: '0.25rem',
+                      boxShadow: '0 2px 8px rgba(124, 58, 237, 0.25)'
+                    }}>
+                      {isExtractingPdf ? (
+                        <>
+                          <Bot size={16} /> Extrayendo texto del PDF...
+                        </>
+                      ) : (
+                        <>
+                          <Paperclip size={16} /> Seleccionar Archivo PDF
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        onChange={handleWorkspacePdfUpload}
+                        disabled={isExtractingPdf}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+
+                    {pdfUploadedName && (
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        background: '#dcfce7',
+                        color: '#166534',
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: '6px',
+                        fontSize: '0.8125rem',
+                        fontWeight: 700,
+                        marginTop: '0.25rem',
+                        border: '1px solid #86efac'
+                      }}>
+                        <CheckCircle2 size={16} color="#16a34a" />
+                        PDF cargado: {pdfUploadedName}
+                      </div>
+                    )}
+                  </div>
+
                   <textarea
-                    rows={8}
+                    rows={6}
                     className={styles.textarea}
-                    placeholder="Pega aquí el texto del Boletín Oficial (BOE, BOJA, BOCM, etc.) o de la resolución..."
+                    placeholder="El texto del PDF aparecerá aquí, o puedes pegar directamente el fragmento del Boletín Oficial (BOE, BOJA, BOCM, etc.)..."
                     value={aiInputText}
                     onChange={e => setAiInputText(e.target.value)}
                   />

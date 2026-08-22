@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sparkles, X, Loader2, ShieldCheck } from 'lucide-react';
+import { Sparkles, X, Loader2, ShieldCheck, Upload, FileText, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createProjectWithAI } from '@/app/actions/ai-project';
+import { extractTextFromPdfAction } from '@/app/actions/pdf-extractor';
 import styles from './ai-modal.module.css';
 
 export function CreateAIProjectModal() {
@@ -12,6 +13,10 @@ export function CreateAIProjectModal() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // PDF Upload states
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [uploadedPdfInfo, setUploadedPdfInfo] = useState<{ name: string; pages: number } | null>(null);
 
   // Form fields
   const [convocatoriaText, setConvocatoriaText] = useState('');
@@ -80,6 +85,28 @@ export function CreateAIProjectModal() {
     }
   };
 
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPdf(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await extractTextFromPdfAction(formData);
+      if (!res.success || !res.text) {
+        setError(res.error || 'No se pudo procesar el archivo PDF');
+      } else {
+        setConvocatoriaText(res.text);
+        setUploadedPdfInfo({ name: res.fileName || file.name, pages: res.numPages || 1 });
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al procesar el archivo');
+    } finally {
+      setIsUploadingPdf(false);
+    }
+  };
+
   return (
     <>
       <button
@@ -102,7 +129,7 @@ export function CreateAIProjectModal() {
                 <div>
                   <h3 className={styles.modalTitle}>Asistente de Formulación con IA</h3>
                   <p className={styles.modalSubtitle}>
-                    Pega las bases de una subvención o describe tu idea. La IA estructurará el proyecto completo.
+                    Sube el PDF de las bases oficiales o describe tu idea. La IA estructurará el proyecto completo.
                   </p>
                 </div>
               </div>
@@ -132,20 +159,93 @@ export function CreateAIProjectModal() {
                   </div>
                 )}
 
+                {/* ZONA DE SUBIDA DE PDF DE BASES / CONVOCATORIA */}
+                <div style={{
+                  border: '2px dashed #93c5fd',
+                  background: '#eff6ff',
+                  borderRadius: '12px',
+                  padding: '1.25rem',
+                  textAlign: 'center',
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e40af', fontWeight: 700, fontSize: '0.9375rem' }}>
+                    <Upload size={20} color="#2563eb" />
+                    <span>Subir Documento PDF de las Bases o Convocatoria</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.8125rem', color: '#3b82f6' }}>
+                    Extrae automáticamente todas las directrices, límites presupuestarios y objetivos del PDF oficial del BOE/Bases.
+                  </p>
+
+                  <label style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    background: '#2563eb',
+                    color: 'white',
+                    padding: '0.5rem 1.25rem',
+                    borderRadius: '8px',
+                    fontSize: '0.875rem',
+                    fontWeight: 700,
+                    cursor: isUploadingPdf ? 'not-allowed' : 'pointer',
+                    marginTop: '0.25rem',
+                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
+                  }}>
+                    {isUploadingPdf ? (
+                      <>
+                        <Loader2 size={16} className={styles.spinner} /> Extrayendo texto del PDF...
+                      </>
+                    ) : (
+                      <>
+                        <FileText size={16} /> Seleccionar PDF de Convocatoria
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handlePdfUpload}
+                      disabled={isUploadingPdf}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+
+                  {uploadedPdfInfo && (
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      background: '#dcfce7',
+                      color: '#166534',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '6px',
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                      marginTop: '0.25rem',
+                      border: '1px solid #86efac'
+                    }}>
+                      <CheckCircle2 size={16} color="#16a34a" />
+                      PDF cargado: {uploadedPdfInfo.name} ({uploadedPdfInfo.pages} páginas analizadas)
+                    </div>
+                  )}
+                </div>
+
                 <div className={styles.formGroup}>
                   <label className={styles.label}>
-                    Bases de la Convocatoria o Idea del Proyecto <span style={{ color: '#ef4444' }}>*</span>
+                    Texto Extraído de las Bases o Idea del Proyecto <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <textarea
                     className={styles.textarea}
                     rows={4}
                     value={convocatoriaText}
                     onChange={(e) => setConvocatoriaText(e.target.value)}
-                    placeholder="Ej: Convocatoria IRPF de la Comunidad de Madrid para proyectos de inclusión social y lucha contra la pobreza. Queremos hacer un programa de alfabetización digital y búsqueda activa de empleo para familias monoparentales con hijos a cargo..."
+                    placeholder="El texto extraído del PDF aparecerá aquí, o puedes escribir directamente tu idea..."
                     required
                   />
                   <span className={styles.hint}>
-                    Puedes pegar un fragmento del BOE/Bases oficiales o simplemente describir qué necesitas conseguir.
+                    Puedes editar o complementar el texto extraído antes de generar el proyecto con IA.
                   </span>
                 </div>
 
