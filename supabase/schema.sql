@@ -1,6 +1,5 @@
 -- ==============================================================================
 -- WEBSOCIAL — ESQUEMA COMPLETO DE BASE DE DATOS Y SEGURIDAD SUPABASE
--- Plataforma Inteligente de Gestión de Proyectos y Subvenciones para el Tercer Sector
 -- ==============================================================================
 
 -- 1. TABLA DE PROYECTOS (EXPEDIENTES)
@@ -58,6 +57,12 @@ ALTER TABLE public.project_tools ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
 
+-- Limpieza de políticas previas si existieran
+DROP POLICY IF EXISTS "Users can access their own projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can access tools for their projects" ON public.project_tools;
+DROP POLICY IF EXISTS "Users can manage their organizations" ON public.organizations;
+DROP POLICY IF EXISTS "Users can view members of their organization" ON public.organization_members;
+
 -- Proyectos: los usuarios solo gestionan sus proyectos o los de su organización
 CREATE POLICY "Users can access their own projects"
   ON public.projects FOR ALL
@@ -98,12 +103,13 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('project-documents', 'project-documents', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Política de lectura pública de evidencias
+DROP POLICY IF EXISTS "Public Read for project documents" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload project documents" ON storage.objects;
+
 CREATE POLICY "Public Read for project documents"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'project-documents');
 
--- Política de subida autenticada
 CREATE POLICY "Authenticated users can upload project documents"
   ON storage.objects FOR INSERT
   WITH CHECK (bucket_id = 'project-documents' AND auth.role() = 'authenticated');

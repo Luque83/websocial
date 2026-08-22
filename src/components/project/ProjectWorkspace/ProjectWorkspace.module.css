@@ -2,6 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* TOP STICKY BAR */
@@ -16,6 +20,8 @@
   flex-wrap: wrap;
   gap: 1rem;
   box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .titleArea {
@@ -23,6 +29,7 @@
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .backBtn {
@@ -38,6 +45,7 @@
   background: var(--bg-surface-subtle, #f8fafc);
   border: 1px solid var(--border-subtle);
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .backBtn:hover {
@@ -46,12 +54,13 @@
 }
 
 .projectTitle {
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.02em;
   word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .saveArea {
@@ -73,7 +82,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.65rem 1.35rem;
+  padding: 0.65rem 1.25rem;
   border-radius: 8px;
   font-weight: 700;
   font-size: 0.875rem;
@@ -83,6 +92,7 @@
   border: none;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .saveBtn:hover:not(:disabled) {
@@ -108,6 +118,7 @@
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .exportBtn:hover {
@@ -115,22 +126,140 @@
   border-color: var(--color-primary-300);
 }
 
+/* AUDIT & RISK SEMAPHORE BANNER */
+.riskBanner {
+  background: white;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl, 12px);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.riskBannerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.riskStatusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  border-radius: 9999px;
+  font-weight: 800;
+  font-size: 0.875rem;
+}
+
+.riskGreen {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.riskYellow {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.riskRed {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.auditMetricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.auditMetricCard {
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  box-sizing: border-box;
+}
+
+.auditMetricLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.auditMetricValue {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.alertsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.alertItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+.alertRed {
+  background: #fef2f2;
+  color: #991b1b;
+  border-left: 3px solid #ef4444;
+}
+
+.alertYellow {
+  background: #fffbeb;
+  color: #92400e;
+  border-left: 3px solid #f59e0b;
+}
+
+.alertGreen {
+  background: #f0fdf4;
+  color: #166534;
+  border-left: 3px solid #22c55e;
+}
+
 /* TABS NAVIGATION */
 .tabNav {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   background: #f1f5f9;
   padding: 0.4rem;
   border-radius: 12px;
-  border: 2px solid #e2e8f0;
+  border: 1px solid #e2e8f0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tabBtn {
-  flex: 1;
-  min-width: 140px;
-  padding: 0.75rem 1rem;
+  flex: 1 0 auto;
+  min-width: 130px;
+  padding: 0.65rem 0.85rem;
   border-radius: 8px;
   border: none;
   font-weight: 700;
@@ -141,7 +270,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   transition: all 0.2s;
   white-space: nowrap;
   font-family: inherit;
@@ -149,7 +278,7 @@
 
 .tabBtn:hover {
   color: #1e293b;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .tabActive {
@@ -177,8 +306,12 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl, 12px);
-  padding: 2rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .sectionHeader {
@@ -200,6 +333,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  word-break: break-word;
 }
 
 .sectionSubtitle {
@@ -207,21 +341,26 @@
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
+  word-break: break-word;
 }
 
 /* FORM ELEMENTS */
 .formGrid2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 1.25rem;
   margin-bottom: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .formGrid3 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 1.25rem;
   margin-bottom: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .formGroup {
@@ -229,16 +368,20 @@
   flex-direction: column;
   gap: 0.35rem;
   margin-bottom: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .label {
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
+  word-break: break-word;
 }
 
 .input, .textarea, .select {
   width: 100%;
+  max-width: 100%;
   padding: 0.65rem 0.85rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -257,30 +400,8 @@
 }
 
 .textarea {
-  min-height: 100px;
+  min-height: 90px;
   resize: vertical;
-  line-height: 1.5;
-}
-
-.hint {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-/* NOTICES & ALERTS */
-.syncNotice {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-left: 4px solid #2563eb;
-  padding: 0.85rem 1.25rem;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: #1e40af;
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
   line-height: 1.5;
 }
 
@@ -291,6 +412,8 @@
   border-radius: var(--radius-lg);
   padding: 1.25rem;
   margin-bottom: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .objHeader {
@@ -300,28 +423,28 @@
   margin-bottom: 0.75rem;
   font-weight: 700;
   color: #1e3a8a;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .resBlock {
   background: white;
   border: 1px solid #cbd5e1;
+  border-left: 3px solid #2563eb;
   border-radius: 8px;
   padding: 1rem;
   margin-top: 0.75rem;
-  margin-left: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .actBlock {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 0.75rem;
-  margin-top: 0.5rem;
-  margin-left: 1rem;
   display: grid;
   grid-template-columns: 2fr 1fr 34px;
   gap: 0.5rem;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .addSmallBtn {
@@ -368,9 +491,11 @@
 /* KPI CARDS */
 .kpiGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .kpiCard {
@@ -381,6 +506,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  box-sizing: border-box;
 }
 
 .kpiHighlight {
@@ -412,17 +538,23 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* TABLES */
+/* TABLES & RESPONSIVENESS */
 .tableWrapper {
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   margin-top: 1rem;
   margin-bottom: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: white;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 0.875rem;
 }
@@ -453,15 +585,18 @@
 /* MEMORIA RENDER */
 .memoriaDoc {
   background: white;
-  padding: clamp(1.5rem, 4vw, 3.5rem);
+  padding: clamp(1.5rem, 4vw, 3rem);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
   max-width: 900px;
+  width: 100%;
   margin: 0 auto;
   line-height: 1.7;
   color: #1e293b;
   word-break: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
 }
 
 .docHeader {
@@ -472,17 +607,18 @@
 }
 
 .docH1 {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 800;
   color: #0f172a;
   margin: 0 0 0.5rem 0;
+  word-break: break-word;
 }
 
 .docH2 {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #1e3a8a;
-  margin-top: 2rem;
+  margin-top: 1.75rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.35rem;
   border-bottom: 1px solid #cbd5e1;
@@ -499,118 +635,7 @@
   color: #334155;
   white-space: pre-wrap;
   line-height: 1.7;
-}
-
-/* AUDIT & RISK SEMAPHORE BANNER */
-.riskBanner {
-  background: white;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl, 12px);
-  padding: 1.25rem 1.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.riskBannerHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.riskStatusPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 1rem;
-  border-radius: 9999px;
-  font-weight: 800;
-  font-size: 0.875rem;
-}
-
-.riskGreen {
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #86efac;
-}
-
-.riskYellow {
-  background: #fef3c7;
-  color: #b45309;
-  border: 1px solid #fde68a;
-}
-
-.riskRed {
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-}
-
-.auditMetricsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
-}
-
-.auditMetricCard {
-  background: #f8fafc;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.auditMetricLabel {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.auditMetricValue {
-  font-size: 1.125rem;
-  font-weight: 800;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.alertsContainer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.alertItem {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
-}
-
-.alertRed {
-  background: #fef2f2;
-  color: #991b1b;
-  border-left: 3px solid #ef4444;
-}
-
-.alertYellow {
-  background: #fffbeb;
-  color: #92400e;
-  border-left: 3px solid #f59e0b;
-}
-
-.alertGreen {
-  background: #f0fdf4;
-  color: #166534;
-  border-left: 3px solid #22c55e;
+  word-break: break-word;
 }
 
 /* EVIDENCE PILLS */
@@ -624,6 +649,7 @@
   border-radius: 6px;
   background: #e2e8f0;
   color: #334155;
+  user-select: none;
 }
 
 .evidenceValid {
@@ -686,6 +712,7 @@
   justify-content: center;
   z-index: 9999;
   padding: 1rem;
+  box-sizing: border-box;
 }
 
 .modalContent {
@@ -698,6 +725,7 @@
   box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .modalHeader {
@@ -716,6 +744,7 @@
   align-items: center;
   gap: 0.5rem;
   margin: 0;
+  word-break: break-word;
 }
 
 .modalCloseBtn {
@@ -742,6 +771,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  box-sizing: border-box;
 }
 
 .aiAnalysisResultCard {
@@ -752,6 +782,7 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  box-sizing: border-box;
 }
 
 .aiRuleList {
@@ -769,6 +800,8 @@
   justify-content: space-between;
   align-items: center;
   font-size: 0.8125rem;
+  word-break: break-word;
+  gap: 0.5rem;
 }
 
 .aiCitationTag {
@@ -778,17 +811,16 @@
   border-radius: 4px;
   background: #eff6ff;
   color: #1d4ed8;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* RESPONSIVE */
+/* RESPONSIVE BREAKPOINTS */
 @media (max-width: 900px) {
   .contentCard {
     padding: 1.25rem;
   }
   .actBlock {
     grid-template-columns: 1fr;
-  }
-  .resBlock {
-    margin-left: 0.5rem;
   }
 }
