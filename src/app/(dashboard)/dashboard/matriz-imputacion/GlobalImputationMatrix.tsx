@@ -455,39 +455,76 @@ export function GlobalImputationMatrix({
 
                         return (
                           <td key={p.id}>
-                            <div className={`${styles.cellCard} ${h > 0 ? styles.cellCardActive : ''}`}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="40"
-                                  step="0.5"
-                                  className={styles.inputNumber}
-                                  value={h}
-                                  onChange={e => handleHourChange(wIdx, p.id, parseFloat(e.target.value) || 0)}
-                                />
-                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: h > 0 ? '#0D3A5F' : '#94A3B8' }}>
-                                  h/sem
+                            <div className={`${styles.cell4BarsContainer} ${h > 0 ? styles.cell4BarsActive : ''}`}>
+                              {/* Input row */}
+                              <div className={styles.cellInputRow}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={maxH}
+                                    step="0.5"
+                                    className={styles.inputNumber}
+                                    value={h}
+                                    onChange={e => handleHourChange(wIdx, p.id, parseFloat(e.target.value) || 0)}
+                                  />
+                                  <span className={styles.hoursUnitLabel}>h/sem</span>
+                                </div>
+                                <span style={{ fontSize: '0.6875rem', fontWeight: 800, color: h > 0 ? '#0D3A5F' : '#94A3B8' }}>
+                                  {maxH > 0 ? ((h / maxH) * 100).toFixed(0) : 0}% JOR
                                 </span>
                               </div>
 
-                              {/* Lifecycle Badges Row */}
-                              {h > 0 && (
-                                <div className={styles.phasePillsRow}>
-                                  <span className={`${styles.pill} ${styles.pillSol}`} title="Solicitud original V1">
-                                    Sol: {lc?.solicitadoHours || h}h
-                                  </span>
-                                  <span className={`${styles.pill} ${styles.pillRef}`} title="Reformulación Baseline V2">
-                                    Ref: {h}h
-                                  </span>
-                                  <span className={`${styles.pill} ${styles.pillEjec}`} title="Meses de nóminas abonadas con SEPA">
-                                    Ejec: {lc?.ejecutadoMonthsPaid || 6}/{lc?.ejecutadoTotalMonths || 12}m
-                                  </span>
-                                  <span className={`${styles.pill} ${styles.pillJust}`} title="Nóminas y SEPA comprobadas">
-                                    ✓ Justif.
-                                  </span>
-                                </div>
-                              )}
+                              {/* 4 Mini-Bars Stack */}
+                              {(() => {
+                                const solH = lc?.solicitadoHours !== undefined ? lc.solicitadoHours : h;
+                                const solP = maxH > 0 ? (solH / maxH) * 100 : 0;
+                                const refP = maxH > 0 ? (h / maxH) * 100 : 0;
+                                const pMonths = lc?.ejecutadoMonthsPaid !== undefined ? lc.ejecutadoMonthsPaid : (h > 0 ? 6 : 0);
+                                const tMonths = lc?.ejecutadoTotalMonths || 12;
+                                const ejeP = tMonths > 0 && h > 0 ? (pMonths / tMonths) * 100 : 0;
+                                const jusP = h > 0 ? (pMonths >= tMonths ? 100 : Math.round((pMonths / tMonths) * 100)) : 0;
+
+                                return (
+                                  <div className={styles.fourBarsBox}>
+                                    {/* 1. Solicitud */}
+                                    <div className={styles.barLine} title={`1. Solicitud original: ${solH}h/sem (${solP.toFixed(0)}% jornada)`}>
+                                      <span className={styles.barTagSol}>1. SOL</span>
+                                      <div className={styles.barTrack}>
+                                        <div className={styles.barFillSol} style={{ width: `${Math.min(100, solP)}%` }} />
+                                      </div>
+                                      <span className={styles.barNumber}>{solH}h</span>
+                                    </div>
+
+                                    {/* 2. Reformulación */}
+                                    <div className={styles.barLine} title={`2. Reformulación / Concedido: ${h}h/sem (${refP.toFixed(0)}% jornada)`}>
+                                      <span className={styles.barTagRef}>2. REF</span>
+                                      <div className={styles.barTrack}>
+                                        <div className={styles.barFillRef} style={{ width: `${Math.min(100, refP)}%` }} />
+                                      </div>
+                                      <span className={styles.barNumber}>{h}h</span>
+                                    </div>
+
+                                    {/* 3. Ejecución Real */}
+                                    <div className={styles.barLine} title={`3. Ejecución real: ${pMonths}/${tMonths} meses de nóminas transferidas con SEPA`}>
+                                      <span className={styles.barTagEjec}>3. EJE</span>
+                                      <div className={styles.barTrack}>
+                                        <div className={styles.barFillEjec} style={{ width: `${Math.min(100, ejeP)}%` }} />
+                                      </div>
+                                      <span className={styles.barNumber}>{pMonths}/{tMonths}m</span>
+                                    </div>
+
+                                    {/* 4. Justificación Final */}
+                                    <div className={styles.barLine} title={`4. Justificación contable: ${jusP}% liquidado con comprobantes y RLC`}>
+                                      <span className={styles.barTagJust}>4. JUS</span>
+                                      <div className={styles.barTrack}>
+                                        <div className={styles.barFillJust} style={{ width: `${Math.min(100, jusP)}%` }} />
+                                      </div>
+                                      <span className={styles.barNumber}>{jusP}%</span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </td>
                         );
@@ -857,16 +894,66 @@ export function GlobalImputationMatrix({
                 const key = `${selectedWorker.id}_${alloc.projectId}`;
                 const lc = initialLifecycleMap[key];
 
+                const maxH = selectedWorker.maxWeeklyHours || 37.5;
+                const h = alloc.weeklyHours;
+                const solH = lc?.solicitadoHours !== undefined ? lc.solicitadoHours : h;
+                const solP = maxH > 0 ? (solH / maxH) * 100 : 0;
+                const refP = maxH > 0 ? (h / maxH) * 100 : 0;
+                const pMonths = lc?.ejecutadoMonthsPaid !== undefined ? lc.ejecutadoMonthsPaid : (h > 0 ? 6 : 0);
+                const tMonths = lc?.ejecutadoTotalMonths || 12;
+                const ejeP = tMonths > 0 && h > 0 ? (pMonths / tMonths) * 100 : 0;
+                const jusP = h > 0 ? (pMonths >= tMonths ? 100 : Math.round((pMonths / tMonths) * 100)) : 0;
+
                 return (
-                  <div key={alloc.id} style={{ background: 'white', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div key={alloc.id} style={{ background: 'white', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ color: '#0D3A5F', fontSize: '0.9375rem' }}>{alloc.projectName}</strong>
+                      <div>
+                        <strong style={{ color: '#0D3A5F', fontSize: '0.9375rem' }}>{alloc.projectName}</strong>
+                        <span style={{ fontSize: '0.6875rem', color: '#009E96', fontWeight: 700, marginLeft: '0.5rem' }}>
+                          {projects.find(p => p.id === alloc.projectId)?.phase || 'En Ejecución'}
+                        </span>
+                      </div>
                       <Link
                         href={`/dashboard/proyectos/${alloc.projectId}`}
                         style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '2px', textDecoration: 'none' }}
                       >
                         Ver Expediente <ExternalLink size={12} />
                       </Link>
+                    </div>
+
+                    {/* 4 Mini-Bars in Drawer */}
+                    <div className={styles.fourBarsBox}>
+                      <div className={styles.barLine} title={`1. Solicitado original: ${solH}h`}>
+                        <span className={styles.barTagSol}>1. SOL</span>
+                        <div className={styles.barTrack}>
+                          <div className={styles.barFillSol} style={{ width: `${Math.min(100, solP)}%` }} />
+                        </div>
+                        <span className={styles.barNumber}>{solH}h</span>
+                      </div>
+
+                      <div className={styles.barLine} title={`2. Reformulado / Aprobado: ${h}h`}>
+                        <span className={styles.barTagRef}>2. REF</span>
+                        <div className={styles.barTrack}>
+                          <div className={styles.barFillRef} style={{ width: `${Math.min(100, refP)}%` }} />
+                        </div>
+                        <span className={styles.barNumber}>{h}h</span>
+                      </div>
+
+                      <div className={styles.barLine} title={`3. Ejecutado: ${pMonths}/${tMonths} nóminas pagadas`}>
+                        <span className={styles.barTagEjec}>3. EJE</span>
+                        <div className={styles.barTrack}>
+                          <div className={styles.barFillEjec} style={{ width: `${Math.min(100, ejeP)}%` }} />
+                        </div>
+                        <span className={styles.barNumber}>{pMonths}/{tMonths}m</span>
+                      </div>
+
+                      <div className={styles.barLine} title={`4. Justificado: ${jusP}% liquidado`}>
+                        <span className={styles.barTagJust}>4. JUS</span>
+                        <div className={styles.barTrack}>
+                          <div className={styles.barFillJust} style={{ width: `${Math.min(100, jusP)}%` }} />
+                        </div>
+                        <span className={styles.barNumber}>{jusP}%</span>
+                      </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', background: '#F8FAFC', padding: '0.5rem', borderRadius: '6px' }}>
@@ -876,7 +963,7 @@ export function GlobalImputationMatrix({
                       </div>
                       <div>
                         <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>Nóminas Pagadas</span>
-                        <div style={{ fontWeight: 800, color: '#16A34A' }}>{lc?.ejecutadoMonthsPaid || 6} / 12 m</div>
+                        <div style={{ fontWeight: 800, color: '#16A34A' }}>{pMonths} / {tMonths} m</div>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>Total Justificado</span>
