@@ -1008,16 +1008,59 @@ export function ProjectWorkspace({
               className={`${styles.tabBtn} ${activeSubTab === 'comparador' ? styles.tabActive : ''}`}
             >
               <Sliders size={15} />
-              <span>3.1 Comparador Solicitado vs. Concedido (Diff)</span>
+              <span>3.1 Comparador Solicitado vs. Concedido</span>
             </button>
             <button
               type="button"
-              onClick={() => setActiveSubTab('baseline_v2')}
-              className={`${styles.tabBtn} ${activeSubTab === 'baseline_v2' ? styles.tabActive : ''}`}
+              onClick={() => setActiveSubTab('reform_diagnostico')}
+              className={`${styles.tabBtn} ${activeSubTab === 'reform_diagnostico' ? styles.tabActive : ''}`}
+            >
+              <FileText size={15} />
+              <span>3.2 Beneficiarios & Diagnóstico</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('reform_marcoLogico')}
+              className={`${styles.tabBtn} ${activeSubTab === 'reform_marcoLogico' ? styles.tabActive : ''}`}
+            >
+              <Target size={15} />
+              <span>3.3 Marco Lógico & Actividades</span>
+              <span className={styles.tabBadge}>{marcoLogico.objectives.length} obj</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('reform_personal')}
+              className={`${styles.tabBtn} ${activeSubTab === 'reform_personal' ? styles.tabActive : ''}`}
+            >
+              <Users size={15} />
+              <span>3.4 Personal & Dedicación</span>
+              <span className={styles.tabBadge}>{personal.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('reform_presupuesto')}
+              className={`${styles.tabBtn} ${activeSubTab === 'reform_presupuesto' ? styles.tabActive : ''}`}
+            >
+              <Calculator size={15} />
+              <span>3.5 Presupuesto Reformulado</span>
+              <span className={styles.tabBadge}>{formatCurrency(totalPresupuesto)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('reform_cronograma')}
+              className={`${styles.tabBtn} ${activeSubTab === 'reform_cronograma' ? styles.tabActive : ''}`}
+            >
+              <Calendar size={15} />
+              <span>3.6 Cronograma Reformulado</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('reform_baseline')}
+              className={`${styles.tabBtn} ${activeSubTab === 'reform_baseline' ? styles.tabActive : ''}`}
             >
               <Award size={15} />
-              <span>3.2 Fijar Baseline Autorizada (V2)</span>
-              <span className={styles.tabBadge}>{versions.filter(v => v.versionType === 'reformulacion').length}</span>
+              <span>3.7 Fijar Baseline Autorizada (V2)</span>
+              <span className={styles.tabBadge}>{versions.filter(v => v.versionType === 'baseline_autorizada').length}</span>
             </button>
           </>
         )}
@@ -1262,12 +1305,23 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.2 DIAGNÓSTICO Y COLECTIVOS */}
-      {activePhase === 'solicitud' && activeSubTab === 'diagnostico' && (
+      {/* 1.2 / 3.2: DIAGNÓSTICO Y COLECTIVOS */}
+      {((activePhase === 'solicitud' && activeSubTab === 'diagnostico') || (activePhase === 'reformulacion' && activeSubTab === 'reform_diagnostico')) && (
         <div className={styles.contentCard}>
+          {activePhase === 'reformulacion' && (
+            <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Sliders size={20} color="#2563EB" />
+              <div>
+                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación de Beneficiarios y Diagnóstico (V2)</strong>
+                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
+                  Los datos de la solicitud original están precargados. Puedes reajustar los beneficiarios previstos de forma proporcional a la cuantía concedida ({formatCurrency(subvencion.importeConcedido)}).
+                </p>
+              </div>
+            </div>
+          )}
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><FileText size={20} color="#2563eb" /> 2. Diagnóstico de Necesidades y Justificación Técnica</h2>
+              <h2 className={styles.sectionTitle}><FileText size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.2 Reformulación de Beneficiarios y Diagnóstico' : '2. Diagnóstico de Necesidades y Justificación Técnica'}</h2>
               <p className={styles.sectionSubtitle}>Fundamenta la necesidad social del proyecto y define los colectivos beneficiarios.</p>
             </div>
           </div>
@@ -1345,12 +1399,25 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.3 / 4.3: MARCO LÓGICO Y EVIDENCIAS */}
-      {((activePhase === 'solicitud' && activeSubTab === 'marcoLogico') || (activePhase === 'ejecucion' && activeSubTab === 'actividades_evidencias')) && (
+      {/* 1.3 / 3.3 / 4.3: MARCO LÓGICO Y EVIDENCIAS */}
+      {((activePhase === 'solicitud' && activeSubTab === 'marcoLogico') || 
+        (activePhase === 'reformulacion' && activeSubTab === 'reform_marcoLogico') || 
+        (activePhase === 'ejecucion' && activeSubTab === 'actividades_evidencias')) && (
         <div className={styles.contentCard}>
+          {activePhase === 'reformulacion' && (
+            <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Sliders size={20} color="#2563EB" />
+              <div>
+                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación del Marco Lógico y Metas (V2)</strong>
+                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
+                  Los objetivos y actividades solicitadas están cargados. Puedes modificar o redimensionar las metas de las actividades para ajustarlas a la cuantía concedida.
+                </p>
+              </div>
+            </div>
+          )}
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Target size={20} color="#2563eb" /> 3. Marco Lógico, Actividades y Evidencias Documentales</h2>
+              <h2 className={styles.sectionTitle}><Target size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.3 Reformulación del Marco Lógico y Metas' : '3. Marco Lógico, Actividades y Evidencias Documentales'}</h2>
               <p className={styles.sectionSubtitle}>Estructura los objetivos y asigna las evidencias obligatorias (firmas, fotos, encuestas) que exige la subvención.</p>
             </div>
             <button
@@ -1634,9 +1701,22 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.4 / 4.1: PERSONAL Y NÓMINAS */}
-      {((activePhase === 'solicitud' && activeSubTab === 'personal') || (activePhase === 'ejecucion' && activeSubTab === 'nominas')) && (
+      {/* 1.4 / 3.4 / 4.1: PERSONAL Y NÓMINAS */}
+      {((activePhase === 'solicitud' && activeSubTab === 'personal') || 
+        (activePhase === 'reformulacion' && activeSubTab === 'reform_personal') || 
+        (activePhase === 'ejecucion' && activeSubTab === 'nominas')) && (
         <div className={styles.contentCard}>
+          {activePhase === 'reformulacion' && (
+            <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Sliders size={20} color="#2563EB" />
+              <div>
+                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación de Personal y Horas Asignadas (V2)</strong>
+                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
+                  Ajusta las horas semanales o los meses de imputación de los trabajadores a la subvención para adaptarlos a la nueva dotación económica.
+                </p>
+              </div>
+            </div>
+          )}
           <datalist id="staff-catalog-datalist">
             {staffCatalog.map(w => (
               <option key={w.id} value={w.name}>
@@ -1647,7 +1727,7 @@ export function ProjectWorkspace({
 
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Users size={20} color="#2563eb" /> 4. Personal, Plantilla y Nóminas Mensuales</h2>
+              <h2 className={styles.sectionTitle}><Users size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.4 Reformulación de Plantilla y Dedicación' : '4. Personal, Plantilla y Nóminas Mensuales'}</h2>
               <p className={styles.sectionSubtitle}>Gestiona la previsión de plantilla asignada y registra los gastos de nóminas mes a mes con sus justificantes de pago bancario y Seguridad Social.</p>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -2179,12 +2259,23 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.5: PRESUPUESTO Y COFINANCIACIÓN */}
-      {activePhase === 'solicitud' && activeSubTab === 'presupuesto' && (
+      {/* 1.5 / 3.5: PRESUPUESTO Y COFINANCIACIÓN */}
+      {((activePhase === 'solicitud' && activeSubTab === 'presupuesto') || (activePhase === 'reformulacion' && activeSubTab === 'reform_presupuesto')) && (
         <div className={styles.contentCard}>
+          {activePhase === 'reformulacion' && (
+            <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Sliders size={20} color="#2563EB" />
+              <div>
+                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación Presupuestaria por Partidas (V2)</strong>
+                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
+                  Presupuesto Solicitado: <strong>{formatCurrency(subvencion.importeSolicitado || totalPresupuesto)}</strong> | Subvención Concedida: <strong>{formatCurrency(subvencion.importeConcedido)}</strong>. Reajusta los importes de cada partida para cuadrar exactamente el presupuesto reformulado.
+                </p>
+              </div>
+            </div>
+          )}
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Calculator size={20} color="#2563eb" /> 5. Presupuesto Desglosado y Desviaciones</h2>
+              <h2 className={styles.sectionTitle}><Calculator size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.5 Reformulación del Presupuesto por Partidas' : '5. Presupuesto Desglosado y Desviaciones'}</h2>
               <p className={styles.sectionSubtitle}>Plan financiero por partidas y control de gasto real frente a presupuesto concedido.</p>
             </div>
             <button
@@ -2624,12 +2715,23 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.6: CRONOGRAMA GANTT */}
-      {activePhase === 'solicitud' && activeSubTab === 'cronograma' && (
+      {/* 1.6 / 3.6: CRONOGRAMA GANTT */}
+      {((activePhase === 'solicitud' && activeSubTab === 'cronograma') || (activePhase === 'reformulacion' && activeSubTab === 'reform_cronograma')) && (
         <div className={styles.contentCard}>
+          {activePhase === 'reformulacion' && (
+            <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Sliders size={20} color="#2563EB" />
+              <div>
+                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación del Cronograma Gantt (V2)</strong>
+                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
+                  Reajusta los meses de inicio y fin de las actividades si el periodo de ejecución concedido se ha modificado.
+                </p>
+              </div>
+            </div>
+          )}
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Calendar size={20} color="#2563eb" /> 7. Cronograma de Ejecución Temporal (Diagrama Gantt)</h2>
+              <h2 className={styles.sectionTitle}><Calendar size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.6 Reformulación del Cronograma Temporal' : '7. Cronograma de Ejecución Temporal (Diagrama Gantt)'}</h2>
               <p className={styles.sectionSubtitle}>Planifica la temporalización mes a mes de cada actividad del proyecto.</p>
             </div>
           </div>
@@ -2690,10 +2792,10 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.7 / 2.1 / 3.1: TRAMITACIÓN, SNAPSHOTS Y REFORMULACIÓN */}
+      {/* 1.7 / 2.1 / 3.1 / 3.7: TRAMITACIÓN, SNAPSHOTS Y REFORMULACIÓN */}
       {((activePhase === 'solicitud' && activeSubTab === 'snapshot_solicitud') || 
         (activePhase === 'subsanacion' && activeSubTab === 'requerimientos') || 
-        (activePhase === 'reformulacion')) && (
+        (activePhase === 'reformulacion' && (activeSubTab === 'comparador' || activeSubTab === 'reform_baseline'))) && (
         <TramitacionTab
           versions={versions}
           requirements={requirements}
@@ -2703,7 +2805,7 @@ export function ProjectWorkspace({
           concedidoAmount={subvencion.importeConcedido || 0}
           totalPresupuesto={totalPresupuesto}
           beneficiariosDirectos={diagnostico.beneficiariesDirect || 0}
-          activeViewMode={activePhase === 'subsanacion' ? 'subsanaciones' : activePhase === 'reformulacion' ? 'reformulacion' : 'versiones'}
+          activeViewMode={activePhase === 'subsanacion' ? 'subsanaciones' : activePhase === 'reformulacion' ? (activeSubTab === 'reform_baseline' ? 'versiones' : 'reformulacion') : 'versiones'}
           formatCurrency={formatCurrency}
         />
       )}
