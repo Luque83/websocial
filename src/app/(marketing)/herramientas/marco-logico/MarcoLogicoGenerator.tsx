@@ -7,6 +7,7 @@ import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
+import { ProjectBridgeBanner } from '@/components/tools/ProjectBridgeBanner';
 import styles from './marco-logico.module.css';
 
 interface Activity {
@@ -416,6 +417,8 @@ ${res.activities.map((act, aIdx) => `
           </div>
         )}
       </div>
+
+      {!projectId && <ProjectBridgeBanner toolName="Generador de Marco Lógico" />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );

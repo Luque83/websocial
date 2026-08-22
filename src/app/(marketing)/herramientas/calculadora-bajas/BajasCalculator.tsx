@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useId } from 'react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
@@ -6,6 +6,7 @@ import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
+import { ProjectBridgeBanner } from '@/components/tools/ProjectBridgeBanner';
 import styles from './bajas.module.css';
 
 type ContingenciaType = 'comun' | 'profesional';
@@ -509,6 +510,8 @@ export function BajasCalculator({ initialData, projectId, projectName: externalP
           )}
         </div>
       </ResultPanel>
+
+      {!projectId && <ProjectBridgeBanner toolName="Calculadora de Bajas e IT" />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );

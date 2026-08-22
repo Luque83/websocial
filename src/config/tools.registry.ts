@@ -94,6 +94,26 @@ export const TOOLS_REGISTRY: ToolRegistryEntry[] = [
     publicHref: '/herramientas/gestion-personal',
     dashboardEnabled: true,
   },
+  {
+    slug: 'calculadora-cofinanciacion',
+    name: 'Calculadora de Cofinanciación',
+    description: 'Calcula el reparto entre subvención, fondos propios y aportación en especie para cumplir los límites de convocatoria.',
+    iconName: 'PieChart',
+    category: 'calculadoras',
+    status: 'available',
+    publicHref: '/herramientas/calculadora-cofinanciacion',
+    dashboardEnabled: true,
+  },
+  {
+    slug: 'checklist-justificacion',
+    name: 'Checklist de Justificación',
+    description: 'Auditoría preventiva y lista de control de facturas, pagos, personal y evidencias antes de la entrega oficial.',
+    iconName: 'ClipboardCheck',
+    category: 'plantillas',
+    status: 'available',
+    publicHref: '/herramientas/checklist-justificacion',
+    dashboardEnabled: true,
+  },
 ];
 
 export const getAvailableTools = () =>

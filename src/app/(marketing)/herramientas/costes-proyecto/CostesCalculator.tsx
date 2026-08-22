@@ -7,6 +7,7 @@ import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
+import { ProjectBridgeBanner } from '@/components/tools/ProjectBridgeBanner';
 import styles from './costes.module.css';
 
 type PartidaCategory = 
@@ -725,6 +726,8 @@ export function CostesCalculator({
           )}
         </div>
       </ResultPanel>
+
+      {!projectId && <ProjectBridgeBanner toolName="Calculadora de Costes y Presupuesto" />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );

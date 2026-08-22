@@ -269,6 +269,29 @@ export function ProjectWorkspace({
     }
   };
 
+  // Export Budget to Official CSV
+  const exportBudgetToCsv = () => {
+    const rows = [
+      ['CATEGORIA', 'CONCEPTO', 'IMPORTE_MENSUAL', 'MESES', 'PRESUPUESTADO', 'GASTO_REAL', 'DESVIACION'],
+      ...presupuesto.partidas.map(p => {
+        const pres = p.monthlyAmount * p.months;
+        const real = p.costeReal !== undefined ? p.costeReal : pres;
+        return [p.category, `"${p.description.replace(/"/g, '""')}"`, p.monthlyAmount, p.months, pres, real, real - pres];
+      }),
+      ['SUBTOTAL DIRECTOS', '', '', '', directCost, directRealCost, directRealCost - directCost],
+      [`INDIRECTOS (${presupuesto.indirectPct}%)`, '', '', '', indirectCost, indirectRealCost, indirectRealCost - indirectCost],
+      ['TOTAL PROYECTO', '', '', '', totalPresupuesto, totalEjecutadoReal, totalEjecutadoReal - totalPresupuesto]
+    ];
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + rows.map(e => e.join(';')).join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `anexo-economico-${diagnostico.projectName.toLowerCase().replace(/\s+/g, '-') || 'proyecto'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
   };
@@ -868,7 +891,6 @@ export function ProjectWorkspace({
           </button>
         </div>
       )}
-
       {/* TAB 4: PRESUPUESTO Y SEGUIMIENTO DE GASTOS */}
       {activeTab === 'presupuesto' && (
         <div className={styles.contentCard}>
@@ -877,6 +899,14 @@ export function ProjectWorkspace({
               <h2 className={styles.sectionTitle}><Calculator size={20} color="#2563eb" /> 4. Presupuesto, Partidas y Seguimiento Real</h2>
               <p className={styles.sectionSubtitle}>Gestiona el presupuesto concedido y compara las partidas presupuestadas frente al gasto real ejecutado.</p>
             </div>
+            <button
+              type="button"
+              onClick={exportBudgetToCsv}
+              className={styles.exportBtn}
+              title="Descarga el anexo económico en formato CSV compatible con Excel"
+            >
+              📥 Exportar Anexo CSV (Excel)
+            </button>
           </div>
 
           {/* Resumen Financiero */}
@@ -939,6 +969,7 @@ export function ProjectWorkspace({
                   const presupuestado = partida.monthlyAmount * partida.months;
                   const real = partida.costeReal !== undefined ? partida.costeReal : presupuestado;
                   const desviacion = real - presupuestado;
+                  const pctDev = presupuestado > 0 ? (desviacion / presupuestado) * 100 : 0;
 
                   return (
                     <tr key={partida.id}>
@@ -1019,7 +1050,12 @@ export function ProjectWorkspace({
                         />
                       </td>
                       <td className={styles.numCol} style={{ color: desviacion > 0 ? '#dc2626' : desviacion < 0 ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>
-                        {desviacion > 0 ? `+${formatCurrency(desviacion)}` : formatCurrency(desviacion)}
+                        <div>{desviacion > 0 ? `+${formatCurrency(desviacion)}` : formatCurrency(desviacion)}</div>
+                        {Math.abs(pctDev) > 10 && (
+                          <span style={{ fontSize: '0.6875rem', color: '#92400e', background: '#fef3c7', padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
+                            ⚠️ {pctDev > 0 ? `+${pctDev.toFixed(0)}%` : `${pctDev.toFixed(0)}%`}
+                          </span>
+                        )}
                       </td>
                       <td>
                         <button

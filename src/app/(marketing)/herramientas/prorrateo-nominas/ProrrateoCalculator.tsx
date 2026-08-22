@@ -7,6 +7,7 @@ import { saveToolData } from '@/app/actions/tools';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
+import { ProjectBridgeBanner } from '@/components/tools/ProjectBridgeBanner';
 import styles from './prorrateo.module.css';
 
 interface ProjectEntry {
@@ -367,6 +368,8 @@ export function ProrrateoCalculator({ initialData, projectId, projectName }: Pro
           )}
         </div>
       </ResultPanel>
+
+      {!projectId && <ProjectBridgeBanner toolName="Prorrateo de Nóminas" />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
