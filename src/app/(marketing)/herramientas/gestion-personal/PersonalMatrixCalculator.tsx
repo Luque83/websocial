@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useId } from 'react';
-import { Plus, Trash2, User, Briefcase, CheckCircle2, AlertTriangle, AlertCircle, FileSpreadsheet, Building2, PieChart, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, User, Users, Briefcase, CheckCircle2, AlertTriangle, AlertCircle, FileSpreadsheet, Building2, PieChart, RefreshCw, Calculator, TrendingUp, Sparkles } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
 import { savePersonalMatrixAction, ProjectAllocation, Worker, PersonalMatrixData } from '@/app/actions/personal';
 import { useToast } from '@/hooks/useToast';
@@ -402,19 +402,34 @@ export function PersonalMatrixCalculator({
       {/* Tarjetas KPI de la Entidad */}
       <div className={styles.summaryGrid}>
         <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Plantilla Activa</span>
-          <span className={styles.summaryValue}>{totalPlantilla} trabajadores</span>
-          <span className={styles.summarySubtitle}>Equipo técnico contratado</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className={styles.kpiIconBox} style={{ background: '#eff6ff', color: '#2563eb' }}>
+              <Users size={18} />
+            </div>
+            <span className={styles.summaryLabel}>Plantilla Activa</span>
+          </div>
+          <span className={styles.summaryValue}>{totalPlantilla} profesionales</span>
+          <span className={styles.summarySubtitle}>Equipo técnico asignado a proyectos</span>
         </div>
         <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Coste Empresa / Mes</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className={styles.kpiIconBox} style={{ background: '#f0fdf4', color: '#16a34a' }}>
+              <Calculator size={18} />
+            </div>
+            <span className={styles.summaryLabel}>Coste Empresa / Mes</span>
+          </div>
           <span className={styles.summaryValue}>{formatCurrency(totalCosteEmpresaMensual)}</span>
           <span className={styles.summarySubtitle}>Bruto + SS Patronal (~31,4%)</span>
         </div>
         <div className={`${styles.summaryCard} ${styles.summaryCardHighlight}`}>
-          <span className={styles.summaryLabel}>Coste Total Plantilla / Año</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className={styles.kpiIconBox} style={{ background: 'rgba(255, 255, 255, 0.2)', color: 'white' }}>
+              <TrendingUp size={18} />
+            </div>
+            <span className={styles.summaryLabel} style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Coste Total Plantilla / Año</span>
+          </div>
           <span className={styles.summaryValue}>{formatCurrency(totalCosteEmpresaAnual)}</span>
-          <span className={styles.summarySubtitle}>Masa salarial total de la entidad</span>
+          <span className={styles.summarySubtitle} style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Masa salarial anual consolidada</span>
         </div>
       </div>
 
@@ -423,6 +438,13 @@ export function PersonalMatrixCalculator({
         <div>
           {workers.map((worker) => {
             const m = calculateWorkerMetrics(worker);
+            const initials = (worker.name || 'T')
+              .split(' ')
+              .map(n => n.charAt(0))
+              .slice(0, 2)
+              .join('')
+              .toUpperCase();
+
             let statusBadge = <span className={styles.badgeOk}><CheckCircle2 size={14} /> 100% Imputado ({m.totalHorasAsignadas}h / {worker.maxWeeklyHours}h)</span>;
             
             if (m.totalHorasAsignadas > worker.maxWeeklyHours) {
@@ -435,9 +457,29 @@ export function PersonalMatrixCalculator({
               <div key={worker.id} className={styles.workerCard}>
                 <div className={styles.workerHeader}>
                   <div className={styles.workerTitle}>
-                    <User size={20} color="#2563eb" />
-                    <span>{worker.name || 'Nuevo Trabajador/a'}</span>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>({worker.role})</span>
+                    <div className={styles.workerAvatar}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span>{worker.name || 'Nuevo Trabajador/a'}</span>
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                          {worker.role}
+                        </span>
+                      </div>
+                      {/* Barra de progreso de jornada */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
+                        <div className={styles.capacityBar}>
+                          <div 
+                            className={`${styles.capacityFill} ${m.totalHorasAsignadas > worker.maxWeeklyHours ? styles.fillDanger : m.totalHorasAsignadas < worker.maxWeeklyHours ? styles.fillWarning : styles.fillOk}`} 
+                            style={{ width: `${Math.min(m.pctAsignado, 100)}%` }}
+                          />
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>
+                          {m.pctAsignado.toFixed(0)}% jornada
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <div className={styles.workerKpis}>
                     {statusBadge}
