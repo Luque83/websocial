@@ -261,6 +261,7 @@ export function ProjectWorkspace({
   const [personal, setPersonal] = useState<ProjectWorkspaceData['personal']>(() => fullWorkspace?.personal || initialPers?.workers || [
     {
       id: 'pers-1',
+      workerId: 'w-1',
       name: 'Elena Gómez',
       role: 'Trabajadora Social / Coordinadora',
       contractType: 'Indefinido',
@@ -272,6 +273,7 @@ export function ProjectWorkspace({
     },
     {
       id: 'pers-2',
+      workerId: 'w-2',
       name: 'Carlos Ruiz',
       role: 'Educador Social',
       contractType: 'Temporal',
@@ -3347,6 +3349,7 @@ export function ProjectWorkspace({
                     const toImport = staffCatalog.filter(w => selectedStaffIds.includes(w.id));
                     const newEntries = toImport.map(w => ({
                       id: `pers-${Date.now()}-${w.id}`,
+                      workerId: w.id,
                       name: w.name,
                       role: w.role || 'Técnico de Proyecto',
                       contractType: 'Indefinido',

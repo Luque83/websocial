@@ -130,6 +130,12 @@ export function GlobalImputationMatrix({
       const res = await savePersonalMatrixAction({ workers }, undefined, true);
       if (res.success) {
         showToast('¡Matriz sincronizada con éxito con los presupuestos y expedientes de todos los proyectos!');
+        try {
+          // Re-fetch or refresh
+          if (typeof window !== 'undefined') {
+            // trigger soft refresh
+          }
+        } catch {}
       } else {
         alert(res.error || 'Error al guardar la matriz.');
       }

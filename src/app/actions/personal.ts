@@ -6,6 +6,7 @@ import { getToolData, saveToolData } from '@/app/actions/tools';
 import { getProjects } from '@/app/actions/projects';
 import { 
   DEFAULT_STAFF_CATALOG, 
+  isWorkerMatch,
   type Worker, 
   type PersonalMatrixData, 
   type ProjectAllocation 
@@ -171,16 +172,26 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
     const projectsList = await getProjects();
     const supabase = await createClient();
 
-    // Consultar todos los workspaces completos de proyectos
-    const { data: projectWorkspaces } = await supabase
+    // Consultar todos los registros relevantes de herramientas de proyectos
+    const { data: projectToolRecords } = await supabase
       .from('project_tools')
-      .select('project_id, data')
-      .eq('tool_slug', 'project-workspace-full');
+      .select('project_id, tool_slug, data')
+      .in('tool_slug', ['project-workspace-full', 'personal-proyecto', 'costes-proyecto']);
 
     const workspaceMap = new Map<string, any>();
-    if (projectWorkspaces) {
-      projectWorkspaces.forEach(pw => {
-        workspaceMap.set(pw.project_id, pw.data);
+    const personalToolMap = new Map<string, any[]>();
+    const costesToolMap = new Map<string, any>();
+
+    if (projectToolRecords) {
+      projectToolRecords.forEach(pt => {
+        if (pt.tool_slug === 'project-workspace-full') {
+          workspaceMap.set(pt.project_id, pt.data);
+        } else if (pt.tool_slug === 'personal-proyecto') {
+          const wList = (pt.data as any)?.workers;
+          if (Array.isArray(wList)) personalToolMap.set(pt.project_id, wList);
+        } else if (pt.tool_slug === 'costes-proyecto') {
+          costesToolMap.set(pt.project_id, pt.data);
+        }
       });
     }
 
@@ -212,9 +223,12 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
 
       formattedProjects.forEach(proj => {
         const wData = workspaceMap.get(proj.id);
-        const assignedInProj = (wData?.personal as any[])?.find(
-          (p: any) => p.workerId === w.id || p.name?.trim().toLowerCase() === w.name.trim().toLowerCase()
-        );
+        const pToolWorkers = personalToolMap.get(proj.id) || [];
+        const projectStaffList: any[] = (wData?.personal && Array.isArray(wData.personal)) 
+          ? wData.personal 
+          : pToolWorkers;
+
+        const assignedInProj = projectStaffList.find((p: any) => isWorkerMatch(w, p));
 
         const allocIdx = existingAllocations.findIndex(a => a.projectId === proj.id);
         let activeHours = 0;
@@ -254,7 +268,7 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
 
         // Obtener nóminas mensuales registradas en este proyecto para este trabajador
         const projectPayrolls: any[] = Array.isArray(wData?.nominasMensuales)
-          ? wData.nominasMensuales.filter((n: any) => n.workerId === w.id || n.trabajador?.trim().toLowerCase() === w.name.trim().toLowerCase())
+          ? wData.nominasMensuales.filter((n: any) => isWorkerMatch(w, { workerId: n.workerId, id: n.workerId, name: n.workerName || n.trabajador }))
           : [];
 
         const payrolls: MonthlyPayrollStatus[] = MONTH_NAMES.map((name, idx) => {
@@ -505,6 +519,18 @@ export async function savePersonalMatrixAction(
             };
 
             await saveToolData(targetProjectId, 'project-workspace-full', updatedWorkspace);
+          } else {
+            const initialWorkspace = {
+              personal: updatedPersonalList,
+              presupuesto: {
+                partidas: newPersonalPartidas,
+                resumen: {
+                  totalCoste: newPersonalPartidas.reduce((s, p) => s + (p.costeReal || 0), 0),
+                  subvencionSolicitada: newPersonalPartidas.reduce((s, p) => s + (p.costeReal || 0), 0),
+                }
+              }
+            };
+            await saveToolData(targetProjectId, 'project-workspace-full', initialWorkspace);
           }
 
           revalidatePath(`/dashboard/proyectos/${targetProjectId}`);

@@ -24,6 +24,38 @@ export interface PersonalMatrixData {
   workers?: Worker[];
 }
 
+export function normalizeName(name: string): string {
+  return (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .toLowerCase()
+    .trim();
+}
+
+export function isWorkerMatch(
+  catalogWorker: { id: string; name: string },
+  projectWorker: { id?: string; workerId?: string; name?: string }
+): boolean {
+  if (!projectWorker) return false;
+  if (projectWorker.workerId && projectWorker.workerId === catalogWorker.id) {
+    return true;
+  }
+  if (projectWorker.id && (projectWorker.id === catalogWorker.id || projectWorker.id === `pers-${catalogWorker.id}`)) {
+    return true;
+  }
+  const normCat = normalizeName(catalogWorker.name);
+  const normProj = normalizeName(projectWorker.name || '');
+  if (!normCat || !normProj) return false;
+  if (normCat === normProj) return true;
+  if (normCat.includes(normProj) || normProj.includes(normCat)) return true;
+  
+  // Word intersection match (e.g. "Elena Gómez Morales" and "Elena Gómez")
+  const wordsCat = normCat.split(/\s+/).filter(w => w.length > 2);
+  const wordsProj = normProj.split(/\s+/).filter(w => w.length > 2);
+  const common = wordsCat.filter(w => wordsProj.includes(w));
+  return common.length >= 2 || (common.length === 1 && wordsCat[0] === wordsProj[0]);
+}
+
 export const DEFAULT_STAFF_CATALOG: Worker[] = [
   {
     id: 'w-1',
