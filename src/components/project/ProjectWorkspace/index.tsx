@@ -30,6 +30,8 @@ import {
   ExternalLink,
   BookOpen,
   UserCheck,
+  History,
+  Sliders,
   X
 } from 'lucide-react';
 import { saveProjectWorkspaceAction, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
@@ -38,6 +40,24 @@ import { uploadProjectDocumentAction } from '@/app/actions/storage';
 import { getOrgStaffCatalogAction } from '@/app/actions/personal';
 import { DEFAULT_STAFF_CATALOG, type Worker as OrgWorker } from '@/config/staff';
 import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
+import { GrantLifecycleNav } from '@/components/project/GrantLifecycleNav';
+import { TramitacionTab } from '@/components/project/tabs/TramitacionTab';
+import { IncidenciasTab } from '@/components/project/tabs/IncidenciasTab';
+import { AuditoriaTab } from '@/components/project/tabs/AuditoriaTab';
+import type { 
+  GrantLifecycleStage, 
+  ProjectVersion, 
+  RequirementItem, 
+  ProjectIncidentItem, 
+  VersionType, 
+  CrossValidationIssue 
+} from '@/types/grant-lifecycle';
+import { 
+  getProjectGrantLifecycleAction, 
+  saveProjectGrantLifecycleAction, 
+  createProjectVersionSnapshotAction, 
+  runCrossAuditorAction 
+} from '@/app/actions/grant-lifecycle';
 import styles from './ProjectWorkspace.module.css';
 
 interface ProjectWorkspaceProps {
@@ -59,11 +79,44 @@ export function ProjectWorkspace({
   initialToolsData,
 }: ProjectWorkspaceProps) {
   // 1. STATE INITIALIZATION
-  const [activeTab, setActiveTab] = useState<'subvencion' | 'diagnostico' | 'marcoLogico' | 'personal' | 'presupuesto' | 'facturas' | 'cronograma' | 'memoria'>('subvencion');
+  const [activeTab, setActiveTab] = useState<'subvencion' | 'diagnostico' | 'marcoLogico' | 'personal' | 'presupuesto' | 'tramitacion' | 'facturas' | 'incidencias' | 'cronograma' | 'auditoria'>('subvencion');
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Grant Lifecycle States (Fase 8)
+  const [lifecycleStage, setLifecycleStage] = useState<GrantLifecycleStage>('en_ejecucion');
+  const [versions, setVersions] = useState<ProjectVersion[]>([]);
+  const [requirements, setRequirements] = useState<RequirementItem[]>([
+    {
+      id: 'req-init-1',
+      notificationDate: '2026-03-10',
+      deadlineDays: 10,
+      deadlineDate: '2026-03-24',
+      funderOrganism: 'Consejería de Inclusión Social',
+      description: 'Subsanación formal: Aportación del Certificado de Representación Legal y Anexo IV firmado electrónicamente.',
+      affectedDocuments: 'Anexo IV - Declaración Responsable y Poderes Notariales',
+      status: 'presentado',
+      submissionDate: '2026-03-18',
+    }
+  ]);
+  const [incidents, setIncidents] = useState<ProjectIncidentItem[]>([
+    {
+      id: 'inc-init-1',
+      title: 'Baja médica IT de Educador Social y sustitución urgente',
+      description: 'Baja médica temporal por incapacidad temporal de 21 días. Sustitución tramitada conforme al Art. 15 Estatuto de los Trabajadores sin alteración del coste empresa.',
+      category: 'personal_baja',
+      legalSeverity: 'comunicacion_previa',
+      budgetImpact: 0,
+      status: 'resuelta',
+      createdAt: '2026-02-15',
+    }
+  ]);
+
+  // Auditor States
+  const [auditScore, setAuditScore] = useState(94);
+  const [auditIssues, setAuditIssues] = useState<CrossValidationIssue[]>([]);
 
   // Staff Catalog States (Importar de Plantilla de la Entidad)
   const [staffCatalog, setStaffCatalog] = useState<OrgWorker[]>(DEFAULT_STAFF_CATALOG);
@@ -76,7 +129,16 @@ export function ProjectWorkspace({
         setStaffCatalog(catalog);
       }
     });
-  }, []);
+
+    getProjectGrantLifecycleAction(projectId).then((res) => {
+      if (res.data) {
+        if (res.data.stage) setLifecycleStage(res.data.stage);
+        if (res.data.versions && res.data.versions.length > 0) setVersions(res.data.versions);
+        if (res.data.requirements && res.data.requirements.length > 0) setRequirements(res.data.requirements);
+        if (res.data.incidents && res.data.incidents.length > 0) setIncidents(res.data.incidents);
+      }
+    });
+  }, [projectId]);
 
   // AI Modal States
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -578,6 +640,95 @@ export function ProjectWorkspace({
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
   };
 
+  // 4. CROSS-AUDITOR EFFECT
+  useEffect(() => {
+    runCrossAuditorAction({
+      subvencion: {
+        organismo: subvencion.organismo,
+        importeSolicitado: subvencion.importeSolicitado,
+        importeConcedido: subvencion.importeConcedido,
+        aportacionPropia: subvencion.aportacionPropia,
+        pctCostesIndirectosMax: analysisResult?.pctCostesIndirectosMax || 10,
+      },
+      diagnostico: {
+        beneficiariosDirectos: diagnostico.beneficiariesDirect,
+        colectivo: diagnostico.targetPopulation,
+      },
+      marcoLogico: {
+        objetivosEspecificos: marcoLogico.objectives.map(o => ({
+          id: o.id,
+          actividades: o.results.flatMap(r => r.activities.map(a => ({
+            id: a.id,
+            name: a.description,
+            targetBeneficiaries: diagnostico.beneficiariesDirect,
+          }))),
+          indicadores: indicadores.map(i => ({
+            id: i.id,
+            name: i.name,
+            target: i.target,
+            baseline: i.baseline,
+            source: i.source,
+          })),
+        })),
+      },
+      personal,
+      presupuesto: {
+        partidas: presupuesto.partidas.map(p => ({
+          id: p.id,
+          category: p.category,
+          description: p.description,
+          costeReal: p.costeReal !== undefined ? p.costeReal : (p.monthlyAmount * p.months),
+          workerId: p.workerId,
+        })),
+        indirectPct: presupuesto.indirectPct,
+        grantAmount: presupuesto.grantAmount,
+      },
+      gastosFacturas,
+      requirements,
+      incidents,
+    }).then(res => {
+      setAuditScore(res.score);
+      setAuditIssues(res.issues);
+    });
+  }, [subvencion, diagnostico, marcoLogico, personal, presupuesto, gastosFacturas, requirements, incidents, analysisResult]);
+
+  const handleStageChange = async (newStage: GrantLifecycleStage) => {
+    setLifecycleStage(newStage);
+    setHasChanges(true);
+    await saveProjectGrantLifecycleAction(projectId, { stage: newStage });
+  };
+
+  const handleRequestSnapshot = async (versionType: VersionType, summary: string) => {
+    const fullData: ProjectWorkspaceData = {
+      diagnostico,
+      subvencion,
+      marcoLogico,
+      indicadores,
+      personal,
+      presupuesto,
+      gastosFacturas,
+      cronograma,
+      convocatoriaAnalisis: analysisResult,
+    };
+    const res = await createProjectVersionSnapshotAction(projectId, versionType, summary, fullData as unknown as Record<string, unknown>);
+    if (res.success && res.version) {
+      setVersions(prev => [...prev.map(v => ({ ...v, isActive: false })), res.version!]);
+      alert(`¡Snapshot creado con éxito: Versión ${res.version.versionNumber} (${versionType})!`);
+    }
+  };
+
+  const handleUpdateRequirements = async (newReqs: RequirementItem[]) => {
+    setRequirements(newReqs);
+    setHasChanges(true);
+    await saveProjectGrantLifecycleAction(projectId, { requirements: newReqs });
+  };
+
+  const handleUpdateIncidents = async (newIncs: ProjectIncidentItem[]) => {
+    setIncidents(newIncs);
+    setHasChanges(true);
+    await saveProjectGrantLifecycleAction(projectId, { incidents: newIncs });
+  };
+
   return (
     <div className={styles.workspace}>
       {/* 1. TOP STICKY BAR */}
@@ -617,60 +768,14 @@ export function ProjectWorkspace({
         </div>
       </header>
 
-      {/* 2. SEMÁFORO DE AUDITORÍA Y CONTROL PREVENTIVO (FASE 6) */}
-      <section className={styles.riskBanner}>
-        <div className={styles.riskBannerHeader}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <ShieldCheck size={24} color="#2563eb" />
-            <div>
-              <strong style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>Panel de Control Preventivo y Auditoría</strong>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Supervisión continua de cumplimiento legal y justificación</div>
-            </div>
-          </div>
-          <span className={`${styles.riskStatusPill} ${globalRisk.class}`}>
-            {globalRisk.label}
-          </span>
-        </div>
-
-        <div className={styles.auditMetricsGrid}>
-          <div className={styles.auditMetricCard}>
-            <span className={styles.auditMetricLabel}>Ejecución Económica</span>
-            <span className={styles.auditMetricValue}>{pctEjecucionEconomica.toFixed(1)}%</span>
-            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>{formatCurrency(totalEjecutadoReal)} de {formatCurrency(subvencion.importeConcedido)}</span>
-          </div>
-          <div className={styles.auditMetricCard}>
-            <span className={styles.auditMetricLabel}>Evidencias Documentales</span>
-            <span className={styles.auditMetricValue} style={{ color: pctEvidencias >= 80 ? '#16a34a' : '#d97706' }}>{pctEvidencias}%</span>
-            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>{validadasCount} de {allEvidencias.length} aportadas</span>
-          </div>
-          <div className={styles.auditMetricCard}>
-            <span className={styles.auditMetricLabel}>Facturas con Pago</span>
-            <span className={styles.auditMetricValue} style={{ color: gastosFacturas.every(f => f.justificantePago) ? '#16a34a' : '#dc2626' }}>
-              {gastosFacturas.filter(f => f.justificantePago).length} / {gastosFacturas.length}
-            </span>
-            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Con justificante bancario</span>
-          </div>
-          <div className={styles.auditMetricCard}>
-            <span className={styles.auditMetricLabel}>Saldo Disponible</span>
-            <span className={styles.auditMetricValue} style={{ color: saldoDisponible < 0 ? '#dc2626' : '#2563eb' }}>
-              {formatCurrency(saldoDisponible)}
-            </span>
-            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Por imputar a la subvención</span>
-          </div>
-        </div>
-
-        <div className={styles.alertsContainer}>
-          {auditAlerts.map((alert, idx) => (
-            <div 
-              key={idx} 
-              className={`${styles.alertItem} ${alert.type === 'red' ? styles.alertRed : alert.type === 'yellow' ? styles.alertYellow : styles.alertGreen}`}
-            >
-              {alert.type === 'red' ? <AlertCircle size={15} /> : alert.type === 'yellow' ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
-              <span>{alert.text}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* 2. GRANT LIFECYCLE STEPPER BAR (FASE 8) */}
+      <GrantLifecycleNav
+        currentStage={lifecycleStage}
+        onStageChange={handleStageChange}
+        auditScore={auditScore}
+        auditErrorCount={auditIssues.length}
+        onOpenAuditor={() => setActiveTab('auditoria')}
+      />
 
       {/* 3. TABS NAVIGATION */}
       <nav className={styles.tabNav}>
@@ -680,7 +785,7 @@ export function ProjectWorkspace({
           className={`${styles.tabBtn} ${activeTab === 'subvencion' ? styles.tabActive : ''}`}
         >
           <Building2 size={16} />
-          <span>1. Subvención</span>
+          <span>1. Convocatoria & Bases</span>
           <span className={styles.tabBadge}>{subvencion.estadoSubvencion}</span>
         </button>
         <button
@@ -720,12 +825,32 @@ export function ProjectWorkspace({
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab('tramitacion')}
+          className={`${styles.tabBtn} ${activeTab === 'tramitacion' ? styles.tabActive : ''}`}
+        >
+          <History size={16} color="#0D3A5F" />
+          <span>6. Tramitación & Subsanaciones</span>
+          <span className={styles.tabBadge} style={{ background: requirements.some(r => r.status === 'pendiente') ? '#FEE2E2' : '#EAF5FB', color: requirements.some(r => r.status === 'pendiente') ? '#DC2626' : '#0D3A5F' }}>
+            {requirements.filter(r => r.status === 'pendiente').length > 0 ? `⚠️ ${requirements.filter(r => r.status === 'pendiente').length}` : `${versions.length} vers.`}
+          </span>
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('facturas')}
           className={`${styles.tabBtn} ${activeTab === 'facturas' ? styles.tabActive : ''}`}
         >
           <Receipt size={16} />
-          <span>6. Gastos / Facturas</span>
+          <span>7. Facturas & Gastos</span>
           <span className={styles.tabBadge}>{gastosFacturas.length}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('incidencias')}
+          className={`${styles.tabBtn} ${activeTab === 'incidencias' ? styles.tabActive : ''}`}
+        >
+          <AlertTriangle size={16} color="#EA580C" />
+          <span>8. Incidencias</span>
+          <span className={styles.tabBadge}>{incidents.length}</span>
         </button>
         <button
           type="button"
@@ -733,16 +858,16 @@ export function ProjectWorkspace({
           className={`${styles.tabBtn} ${activeTab === 'cronograma' ? styles.tabActive : ''}`}
         >
           <Calendar size={16} />
-          <span>7. Cronograma</span>
+          <span>9. Cronograma</span>
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('memoria')}
-          className={`${styles.tabBtn} ${activeTab === 'memoria' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('auditoria')}
+          className={`${styles.tabBtn} ${activeTab === 'auditoria' ? styles.tabActive : ''}`}
         >
-          <Sparkles size={16} color="#7c3aed" />
-          <span style={{ color: activeTab === 'memoria' ? '#7c3aed' : 'inherit', fontWeight: 800 }}>
-            8. Cuenta Justificativa
+          <ShieldCheck size={16} color="#16C7B2" />
+          <span style={{ color: activeTab === 'auditoria' ? '#16C7B2' : 'inherit', fontWeight: 800 }}>
+            10. Auditoría & Justificación
           </span>
         </button>
       </nav>
@@ -2098,205 +2223,77 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* TAB 8: MEMORIA Y CUENTA JUSTIFICATIVA (FASE 8) */}
-      {activeTab === 'memoria' && (
-        <div className={styles.contentCard}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <h2 className={styles.sectionTitle}><Sparkles size={20} color="#7c3aed" /> 8. Cuenta Justificativa y Memoria Técnica Consolidada</h2>
-              <p className={styles.sectionSubtitle}>Documento oficial consolidado automáticamente con todos los datos técnicos, nóminas y relación de facturas.</p>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button
-                type="button"
-                onClick={handleCopyMemoria}
-                className={styles.exportBtn}
-              >
-                {copied ? <Check size={16} color="#16a34a" /> : <Copy size={16} />}
-                {copied ? '¡Copiado!' : 'Copiar Texto'}
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className={styles.saveBtn}
-              >
-                <Printer size={16} /> Imprimir / Guardar PDF
-              </button>
-            </div>
-          </div>
+      {/* TAB 6: TRAMITACIÓN ADMINISTRATIVA, VERSIONES Y SUBSANACIONES (FASE 8) */}
+      {activeTab === 'tramitacion' && (
+        <TramitacionTab
+          versions={versions}
+          requirements={requirements}
+          onRequestSnapshot={handleRequestSnapshot}
+          onUpdateRequirements={handleUpdateRequirements}
+          solicitadoAmount={subvencion.importeSolicitado || 0}
+          concedidoAmount={subvencion.importeConcedido || 0}
+          totalPresupuesto={totalPresupuesto}
+          beneficiariosDirectos={diagnostico.beneficiariesDirect || 0}
+          formatCurrency={formatCurrency}
+        />
+      )}
 
-          {/* CHECKLIST OFICIAL DE JUSTIFICACIÓN (HERRAMIENTA INTEGRADA) */}
-          <div style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1', borderLeft: '5px solid #10b981', borderRadius: '12px', padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#065f46', margin: '0 0 0.35rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <FileCheck size={18} color="#10b981" /> Checklist de Verificación Previa a la Presentación Oficial
-            </h3>
-            <p style={{ fontSize: '0.8125rem', color: '#5c7e9b', margin: '0 0 1rem 0' }}>
-              Comprueba los 6 requisitos indispensables antes de registrar la cuenta justificativa en la sede electrónica del organismo.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
-              {[
-                { id: 'c1', label: 'Facturas completas con NIF y concepto coincidente', ok: gastosFacturas.length > 0 },
-                { id: 'c2', label: 'Extractos bancarios de cargo con fecha y beneficiario', ok: gastosFacturas.filter(f => f.justificantePago).length === gastosFacturas.length },
-                { id: 'c3', label: 'Hojas de firmas y partes de asistencia de actividades', ok: pctEvidencias > 50 },
-                { id: 'c4', label: 'Publicidad oficial y logotipos del financiador incorporados', ok: true },
-                { id: 'c5', label: 'Certificados de estar al corriente con SS y Hacienda', ok: true },
-                { id: 'c6', label: 'Memoria técnica de evaluación firmada por la dirección', ok: true },
-              ].map(item => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid #cbd5e1', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.8125rem', color: '#0f172a', fontWeight: 600 }}>
-                  <CheckCircle2 size={16} color={item.ok ? '#10b981' : '#f59e0b'} style={{ flexShrink: 0 }} />
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* TAB 8: GESTOR DE INCIDENCIAS Y MODIFICACIONES (FASE 8) */}
+      {activeTab === 'incidencias' && (
+        <IncidenciasTab
+          incidents={incidents}
+          onUpdateIncidents={handleUpdateIncidents}
+          formatCurrency={formatCurrency}
+        />
+      )}
 
-          {/* RENDERIZADO DEL EXPEDIENTE MEMORIA */}
-          <div id="memoria-content" className={styles.memoriaDoc}>
-            <div className={styles.docHeader}>
-              <h1 className={styles.docH1}>{diagnostico.projectName || 'Cuenta Justificativa de Subvención'}</h1>
-              <p style={{ margin: 0, fontSize: '1.125rem', color: '#1e3a8a', fontWeight: 700 }}>
-                {subvencion.organismo} · {subvencion.linea}
-              </p>
-              <p style={{ margin: '0.35rem 0 0', fontSize: '0.875rem', color: '#475569' }}>
-                Expediente: <strong>{subvencion.expedienteNum}</strong> | Entidad: <strong>{diagnostico.organization}</strong>
-              </p>
-              <p style={{ margin: '0.2rem 0 0', fontSize: '0.8125rem', color: '#64748b' }}>
-                Periodo de Ejecución: {subvencion.fechaInicio} al {subvencion.fechaFin} | Fecha Límite Justificación: {subvencion.fechaLimiteJustificacion}
-              </p>
-            </div>
-
-            {/* Cap 1 */}
-            <div className={styles.docSection}>
-              <h2 className={styles.docH2}>1. Justificación y Colectivo Destinatario</h2>
-              <div className={styles.docText}>
-                <strong>Diagnóstico de la Realidad:</strong><br />
-                {diagnostico.diagnosticText}
-              </div>
-              <div className={styles.docText} style={{ marginTop: '0.75rem' }}>
-                <strong>Justificación Técnica:</strong><br />
-                {diagnostico.justification}
-              </div>
-              <div className={styles.docText} style={{ marginTop: '0.75rem' }}>
-                <strong>Beneficiarios:</strong> {diagnostico.beneficiariesDirect} personas beneficiarias directas ({diagnostico.targetPopulation}) en {diagnostico.location}.
-              </div>
-            </div>
-
-            {/* Cap 2 */}
-            <div className={styles.docSection}>
-              <h2 className={styles.docH2}>2. Objetivos, Actividades y Evidencias de Ejecución</h2>
-              {marcoLogico.objectives.map((obj, i) => (
-                <div key={obj.id} style={{ marginTop: '1rem', paddingLeft: '1rem', borderLeft: '3px solid #2563eb' }}>
-                  <strong>Objetivo Específico {i + 1}:</strong> {obj.description}
-                  {obj.results.map((res, rI) => (
-                    <div key={res.id} style={{ marginTop: '0.5rem', paddingLeft: '0.75rem' }}>
-                      <em>Resultado {i + 1}.{rI + 1}:</em> {res.description}
-                      <ul style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
-                        {res.activities.map(act => (
-                          <li key={act.id} style={{ marginBottom: '0.35rem' }}>
-                            <strong>{act.description}</strong> (Responsable: {act.responsible})
-                            {act.evidencias && act.evidencias.length > 0 && (
-                              <span style={{ display: 'block', fontSize: '0.8125rem', color: '#475569' }}>
-                                Evidencias aportadas: {act.evidencias.map(e => `${e.descripcion} (${e.estado}${e.archivoNombre ? ': ' + e.archivoNombre : ''})`).join(', ')}
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-
-            {/* Cap 3: Nóminas */}
-            <div className={styles.docSection}>
-              <h2 className={styles.docH2}>3. Personal Técnico y Nóminas Imputadas</h2>
-              <table className={styles.table} style={{ marginTop: '0.5rem' }}>
-                <thead>
-                  <tr>
-                    <th>Trabajador/a</th>
-                    <th>Puesto</th>
-                    <th>Jornada Imputada</th>
-                    <th>Meses</th>
-                    <th className={styles.numCol}>Coste Imputado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {personal.map(p => {
-                    const costeEmpresaMes = p.monthlySalary * (1 + p.ssPct / 100);
-                    const pct = p.maxWeeklyHours > 0 ? (p.weeklyHours / p.maxWeeklyHours) : 1;
-                    const total = (costeEmpresaMes * pct) * (p.months || 12);
-                    return (
-                      <tr key={p.id}>
-                        <td><strong>{p.name}</strong></td>
-                        <td>{p.role}</td>
-                        <td>{p.weeklyHours}h/sem ({(pct * 100).toFixed(0)}%)</td>
-                        <td>{p.months} meses</td>
-                        <td className={styles.numCol}>{formatCurrency(total)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Cap 4: Facturas */}
-            <div className={styles.docSection}>
-              <h2 className={styles.docH2}>4. Relación Clasificada de Gastos y Facturas</h2>
-              <table className={styles.table} style={{ marginTop: '0.5rem' }}>
-                <thead>
-                  <tr>
-                    <th>Proveedor</th>
-                    <th>Nº Factura</th>
-                    <th>Fecha</th>
-                    <th>Concepto</th>
-                    <th>% Imp.</th>
-                    <th className={styles.numCol}>Total Factura</th>
-                    <th className={styles.numCol}>Imputado Subvención</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {gastosFacturas.map(f => (
-                    <tr key={f.id}>
-                      <td><strong>{f.proveedor}</strong> ({f.nif})</td>
-                      <td>{f.numFactura}</td>
-                      <td>{f.fecha}</td>
-                      <td>{f.concepto}</td>
-                      <td>{f.pctImputado}%</td>
-                      <td className={styles.numCol}>{formatCurrency(f.totalFactura)}</td>
-                      <td className={styles.numCol}><strong>{formatCurrency(f.importeImputado)}</strong></td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: '#f8fafc', fontWeight: 800 }}>
-                    <td colSpan={6}>TOTAL GASTOS FACTURADOS IMPUTADOS</td>
-                    <td className={styles.numCol}>{formatCurrency(gastosFacturas.reduce((a, f) => a + f.importeImputado, 0))}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Cap 5: Balance Final */}
-            <div className={styles.docSection}>
-              <h2 className={styles.docH2}>5. Balance Financiero de Liquidación</h2>
-              <table className={styles.table} style={{ marginTop: '0.5rem' }}>
-                <tbody>
-                  <tr>
-                    <td><strong>Subvención Concedida Oficialmente:</strong></td>
-                    <td className={styles.numCol}><strong>{formatCurrency(subvencion.importeConcedido)}</strong></td>
-                  </tr>
-                  <tr>
-                    <td>Total Gasto Ejecutado Justificado:</td>
-                    <td className={styles.numCol}>{formatCurrency(totalEjecutadoReal)}</td>
-                  </tr>
-                  <tr style={{ background: '#eff6ff', fontWeight: 800, fontSize: '1rem', color: '#1e3a8a' }}>
-                    <td>SALDO DE LIQUIDACIÓN ({saldoDisponible === 0 ? 'Ejecución 100%' : saldoDisponible > 0 ? 'Remanente' : 'Exceso'}):</td>
-                    <td className={styles.numCol}>{formatCurrency(saldoDisponible)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      {/* TAB 10: AUDITORÍA DE COHERENCIA Y JUSTIFICACIÓN OFICIAL (FASE 8) */}
+      {activeTab === 'auditoria' && (
+        <AuditoriaTab
+          auditScore={auditScore}
+          auditIssues={auditIssues}
+          projectName={diagnostico.projectName || 'Expediente de Subvención'}
+          subvencion={subvencion}
+          diagnostico={{
+            colectivo: diagnostico.targetPopulation,
+            justificacion: diagnostico.justification,
+            beneficiariosDirectos: diagnostico.beneficiariesDirect,
+            localizacion: diagnostico.location,
+          }}
+          marcoLogico={{
+            objetivoGeneral: marcoLogico.proposito || marcoLogico.fin,
+            objetivosEspecificos: marcoLogico.objectives.map((o) => ({
+              id: o.id,
+              name: o.description,
+              actividades: o.results.flatMap(r => r.activities.map(a => ({
+                id: a.id,
+                name: a.description,
+                targetBeneficiaries: diagnostico.beneficiariesDirect,
+                startMonth: 1,
+                endMonth: cronograma.durationMonths || 12,
+              }))),
+              indicadores: indicadores.map(i => ({
+                id: i.id,
+                name: i.name,
+                target: i.target,
+                baseline: i.baseline,
+                source: i.source,
+              })),
+            })),
+          }}
+          personal={personal}
+          presupuesto={{
+            ...presupuesto,
+            partidas: presupuesto.partidas.map(p => ({
+              id: p.id,
+              category: p.category,
+              description: p.description,
+              costeReal: p.costeReal !== undefined ? p.costeReal : (p.monthlyAmount * p.months),
+            }))
+          }}
+          gastosFacturas={gastosFacturas}
+          formatCurrency={formatCurrency}
+        />
       )}
 
       {/* 4. MODAL: AI CONVOCATORIA ANALYZER (FASE 7) */}

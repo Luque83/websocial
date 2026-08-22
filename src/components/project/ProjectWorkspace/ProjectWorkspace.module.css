@@ -728,6 +728,187 @@
   color: #2563eb;
 }
 
+/* LIFECYCLE STEPPER BAR */
+.lifecycleStepper {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.5rem 0.25rem;
+  margin-bottom: 0.5rem;
+  scrollbar-width: thin;
+}
+
+.stageStep {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.15s;
+}
+
+.stageStepActive {
+  background: #0D3A5F;
+  color: #ffffff;
+  border-color: #16C7B2;
+  box-shadow: 0 2px 8px rgba(13, 58, 95, 0.25);
+}
+
+.stageStepDone {
+  background: #EAF5FB;
+  color: #009E96;
+  border-color: #D5ECF8;
+}
+
+.stageStepPending {
+  background: #F1F5F9;
+  color: #64748B;
+  border-color: #E2E8F0;
+}
+
+/* AUDITOR & ISSUES */
+.auditorBanner {
+  background: #ffffff;
+  border: 2px solid #D5ECF8;
+  border-left: 6px solid #16C7B2;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  box-shadow: 0 4px 12px rgba(13, 58, 95, 0.05);
+}
+
+.auditScoreCircle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.auditScoreGood {
+  background: #DCFCE7;
+  color: #166534;
+  border: 3px solid #86EFAC;
+}
+
+.auditScoreWarn {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 3px solid #FCD34D;
+}
+
+.auditScoreBad {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 3px solid #FCA5A5;
+}
+
+.issueCard {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 0.85rem 1.15rem;
+  margin-bottom: 0.65rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid #E2E8F0;
+}
+
+.issueCardError {
+  border-left: 4px solid #EF4444;
+  background: #FFF5F5;
+}
+
+.issueCardWarning {
+  border-left: 4px solid #F59E0B;
+  background: #FFFBEB;
+}
+
+.issueCardInfo {
+  border-left: 4px solid #3B82F6;
+  background: #EFF6FF;
+}
+
+/* DIFF & VARIATION TABLES */
+.diffTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.diffTable th {
+  background: #0D3A5F;
+  color: #ffffff;
+  font-weight: 800;
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.diffTable td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.diffPositive {
+  color: #16A34A;
+  font-weight: 800;
+}
+
+.diffNegative {
+  color: #DC2626;
+  font-weight: 800;
+}
+
+.diffNeutral {
+  color: #64748B;
+  font-weight: 700;
+}
+
+/* INCIDENT & SEVERITY TAGS */
+.severityTagInformativa {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #93C5FD;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.severityTagComunicacion {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FCD34D;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.severityTagAutorizacion {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
 /* RESPONSIVE BREAKPOINTS */
 @media (max-width: 900px) {
   .contentCard {

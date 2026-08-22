@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, LogOut, UserCircle, FolderKanban, ShieldCheck, Users, Sparkles, Eye, ToggleLeft, ToggleRight, UserCheck, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, LogOut, UserCircle, FolderKanban, ShieldCheck, Users, Sparkles, Eye, ToggleLeft, ToggleRight, UserCheck, FileSpreadsheet, Clock } from 'lucide-react';
 import { signOutAction } from '@/app/(dashboard)/actions';
 import { Logo } from '@/components/ui/Logo';
 import styles from './DashboardSidebar.module.css';
@@ -24,6 +24,8 @@ export function DashboardSidebar({ userEmail, recentProjects, isAdmin = false }:
     { name: 'Mis Proyectos', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Plantilla y Personal', href: '/dashboard/personal', icon: UserCheck },
     { name: 'Matriz de Imputación', href: '/dashboard/matriz-imputacion', icon: FileSpreadsheet },
+    { name: 'Bóveda Documental', href: '/dashboard/documentos', icon: FolderKanban },
+    { name: 'Plazos y Alertas', href: '/dashboard/plazos', icon: Clock },
     { name: 'Equipo y Permisos', href: '/dashboard/equipo', icon: Users },
     { name: 'Mi Entidad / Perfil', href: '/dashboard/perfil', icon: UserCircle },
   ];
