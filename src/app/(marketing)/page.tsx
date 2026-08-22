@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   Calculator,
   FileText,
@@ -12,6 +13,12 @@ import {
   Zap,
   Target,
   BookOpen,
+  Bot,
+  Receipt,
+  ShieldCheck,
+  Building2,
+  FileCheck,
+  CheckCircle2
 } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
@@ -23,109 +30,115 @@ import { NewsletterCTA } from "@/components/marketing/NewsletterCTA";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "WebSocial — Plataforma profesional para el Tercer Sector",
+  title: "WebSocial — La Plataforma que Entiende la Subvención",
   description:
-    "Herramientas, recursos y soluciones para trabajadores sociales, educadores sociales y profesionales de la intervención social. Reduce la burocracia, aumenta el impacto.",
+    "Plataforma inteligente de gestión de proyectos, subvenciones y justificación oficial para entidades del Tercer Sector. Desde el análisis de bases con IA hasta la cuenta justificativa 1-clic.",
 };
 
 const valueProps = [
   {
-    icon: Clock,
-    title: "Ahorra tiempo",
+    icon: Bot,
+    title: "IA Documental Trazable",
     description:
-      "Reduce hasta un 65% el tiempo dedicado a documentación, cálculos y gestión administrativa.",
-  },
-  {
-    icon: Shield,
-    title: "Seguro y conforme",
-    description:
-      "Diseñado con RGPD y LOPDGDD en mente. Tus datos y los de las personas atendidas, protegidos.",
-  },
-  {
-    icon: Zap,
-    title: "Herramientas especializadas",
-    description:
-      "Calculadoras, generadores y plantillas diseñadas por y para profesionales del sector social.",
+      "Pega las bases reguladoras o resoluciones oficiales. La IA extrae gastos subvencionables, límites de costes indirectos y plazos con cita de artículos.",
   },
   {
     icon: Target,
-    title: "Todo en un lugar",
+    title: "Expediente Digital Único",
     description:
-      "Centraliza proyectos, subvenciones, indicadores y documentación en una única plataforma.",
+      "Un dato se introduce una vez y se reutiliza: Marco Lógico, nóminas con SS Patronal, registro de facturas y evidencias de actividades.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Auditoría Preventiva y Riesgo",
+    description:
+      "Semáforo de cumplimiento continuo (🟢/🟡/🔴) que detecta facturas sin justificante bancario o desviaciones presupuestarias (>10%).",
+  },
+  {
+    icon: FileCheck,
+    title: "Cuenta Justificativa 1-Clic",
+    description:
+      "Compila automáticamente la memoria oficial de liquidación con trazabilidad técnica y económica completa lista para PDF o Excel (CSV).",
   },
 ];
 
 const featuredTools = [
   {
     icon: Calculator,
-    name: "Calculadora de indicadores",
+    name: "Calculadora de Cofinanciación",
     description:
-      "Calcula y gestiona indicadores de impacto social de tus proyectos de forma sencilla.",
-    category: "Calculadoras",
+      "Calcula el reparto oficial entre subvención, fondos propios de la ONG y valoración en especie.",
+    category: "Financiación",
     tier: "free" as const,
+    href: "/herramientas/calculadora-cofinanciacion"
   },
   {
-    icon: FileText,
-    name: "Generador de presupuestos",
+    icon: FileCheck,
+    name: "Checklist de Justificación",
     description:
-      "Crea presupuestos profesionales para proyectos sociales con desglose por partidas.",
-    category: "Generadores",
+      "Auditoría preventiva de facturas, nóminas, RLC/RNT y publicidad de logos antes de la entrega.",
+    category: "Auditoría",
     tier: "free" as const,
+    href: "/herramientas/checklist-justificacion"
   },
   {
     icon: BarChart3,
-    name: "Matriz de marco lógico",
+    name: "Matriz de Marco Lógico",
     description:
-      "Diseña y estructura tus proyectos con el estándar de marco lógico completo.",
-    category: "Generadores",
-    tier: "pro" as const,
-  },
-  {
-    icon: Briefcase,
-    name: "Control de subvenciones",
-    description:
-      "Gestiona plazos, requisitos y justificaciones de todas tus subvenciones en un solo lugar.",
-    category: "Gestión",
-    tier: "pro" as const,
+      "Diseña objetivos, resultados, actividades y vincula las evidencias obligatorias (firmas, fotos).",
+    category: "Proyectos",
+    tier: "free" as const,
+    href: "/herramientas/marco-logico"
   },
   {
     icon: Users,
-    name: "Cálculo de costes de personal",
+    name: "Prorrateo de Nóminas",
     description:
-      "Prorrateo de nóminas, porcentajes de jornada e imputación a proyectos de forma automática.",
-    category: "Calculadoras",
+      "Imputación salarial multiproyecto con cálculo exacto de coste empresa y SS Patronal (~31,4%).",
+    category: "Personal",
     tier: "free" as const,
+    href: "/herramientas/prorrateo-nominas"
+  },
+  {
+    icon: Calculator,
+    name: "Presupuesto y Desviaciones",
+    description:
+      "Control de costes directos, indirectos y alertas tempranas de desviación legal de partidas (±10%).",
+    category: "Finanzas",
+    tier: "free" as const,
+    href: "/herramientas/costes-proyecto"
   },
   {
     icon: BookOpen,
-    name: "Generador de memorias",
+    name: "Memoria Técnica Oficial",
     description:
-      "Genera memorias de actividades y justificación técnica a partir de los datos del proyecto.",
+      "Generador estructurado de la memoria técnica de actividades y justificación narrativa.",
     category: "Documentos",
-    tier: "pro" as const,
+    tier: "free" as const,
+    href: "/herramientas/memoria-proyecto"
   },
 ];
 
 const audiences = [
   {
-    icon: HeartHandshake,
-    title: "Trabajadores/as sociales",
-    description: "Informes, historias sociales, valoraciones y seguimiento de casos.",
-  },
-  {
-    icon: Users,
-    title: "Educadores/as sociales",
-    description: "Proyectos educativos, actividades, indicadores y memorias.",
+    icon: Building2,
+    title: "Dirección de ONG y Asociaciones",
+    description: "Supervisión de la cartera de subvenciones, calendario de vencimientos y semáforos de riesgo.",
   },
   {
     icon: Briefcase,
-    title: "Técnicos/as de proyectos",
-    description: "Diseño, formulación, presupuestación y seguimiento de proyectos.",
+    title: "Técnicos/as de Proyectos",
+    description: "Formulación rápida de marco lógico, indicadores, cronogramas y carga de hojas de firmas.",
   },
   {
-    icon: BarChart3,
-    title: "Gestores/as de subvenciones",
-    description: "Control de convocatorias, plazos, justificaciones y auditorías.",
+    icon: Receipt,
+    title: "Gestores/as Económicos y Admin",
+    description: "Imputación clasificada de facturas, control de transferencias y cuadro financiero de liquidación.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Auditores/as y Evaluadores",
+    description: "Revisión documental ágil y trazable con acceso directo a justificantes bancarios y evidencias.",
   },
 ];
 
@@ -139,14 +152,14 @@ export default function HomePage() {
         name: 'WebSocial',
         url: 'https://websocial.es',
         description:
-          'Plataforma de herramientas, calculadoras y recursos para trabajadores sociales, educadores sociales y profesionales del Tercer Sector en España.',
+          'Plataforma inteligente de gestión de proyectos, subvenciones y justificación oficial para el Tercer Sector en España.',
         areaServed: 'ES',
         knowsAbout: [
-          'Trabajo social',
-          'Servicios sociales',
-          'Gestión de proyectos sociales',
           'Subvenciones',
+          'Gestión de proyectos sociales',
+          'Marco Lógico',
           'Tercer Sector',
+          'Justificación de subvenciones',
         ],
       },
       {
@@ -156,11 +169,6 @@ export default function HomePage() {
         name: 'WebSocial',
         publisher: { '@id': 'https://websocial.es/#organization' },
         inLanguage: 'es',
-        potentialAction: {
-          '@type': 'SearchAction',
-          target: 'https://websocial.es/blog?q={search_term_string}',
-          'query-input': 'required name=search_term_string',
-        },
       },
     ],
   };
@@ -174,7 +182,6 @@ export default function HomePage() {
         }}
       />
       {/* ═══ HERO ═══ */}
-
       <section className={styles.hero}>
         <div className={styles.heroBackground}>
           <div className={styles.heroGlow} />
@@ -183,160 +190,140 @@ export default function HomePage() {
         <Container size="xl">
           <FadeIn className={styles.heroContent}>
             <Badge variant="primary" size="md">
-              🚀 Plataforma para el Tercer Sector
+              🏛️ La Plataforma que Entiende la Subvención
             </Badge>
             <h1 className={styles.heroTitle}>
-              Menos burocracia.
+              Gestión inteligente de proyectos y subvenciones.
               <br />
               <span className={styles.heroTitleAccent}>
-                Más intervención social.
+                Para el Tercer Sector.
               </span>
             </h1>
             <p className={styles.heroSubtitle}>
-              Herramientas, calculadoras y recursos profesionales diseñados para
-              trabajadores sociales, educadores sociales y profesionales del
-              Tercer Sector. Simplifica tu gestión para centrarte en lo que
-              importa: las personas.
+              Desde el análisis de bases oficiales con IA hasta la cuenta justificativa oficial.
+              Centraliza en un único expediente digital el marco lógico, nóminas, facturas con pago bancario y evidencias de actividades.
             </p>
-            <div className={styles.heroCtas}>
-              <Button href="/herramientas" size="lg">
-                Explorar herramientas
-                <ArrowRight size={18} />
+            <div className={styles.heroActions}>
+              <Button href="/registro" size="lg" variant="primary">
+                Crear Expediente Gratis <ArrowRight size={18} />
               </Button>
-              <Button href="/sobre-nosotros" variant="outline" size="lg">
-                Conoce el proyecto
+              <Button href="/herramientas" size="lg" variant="outline">
+                Ver Herramientas Gratuitas
               </Button>
             </div>
-            <div className={styles.heroTrust}>
-              <span className={styles.heroTrustItem}>
-                <Shield size={14} /> Cumplimiento RGPD
+            <div className={styles.heroProof}>
+              <span className={styles.proofItem}>
+                <CheckCircle2 size={16} className={styles.proofIcon} /> Sin tarjeta de crédito
               </span>
-              <span className={styles.heroTrustItem}>
-                <Zap size={14} /> 100% gratuito en fase inicial
+              <span className={styles.proofItem}>
+                <CheckCircle2 size={16} className={styles.proofIcon} /> 10 Herramientas públicas activas
               </span>
-              <span className={styles.heroTrustItem}>
-                <Target size={14} /> Diseñado por profesionales del sector
+              <span className={styles.proofItem}>
+                <CheckCircle2 size={16} className={styles.proofIcon} /> Conforme a la Ley General de Subvenciones
               </span>
             </div>
           </FadeIn>
         </Container>
       </section>
 
-      {/* ═══ VALUE PROPOSITION ═══ */}
-      <section className={styles.section}>
-        <Container>
+      {/* ═══ VALUE PROPS ═══ */}
+      <section className={styles.valueProps}>
+        <Container size="xl">
           <SectionHeading
-            eyebrow="¿Por qué WebSocial?"
-            title="Tu trabajo importa. Tu tiempo también."
-            subtitle="Dedicamos demasiadas horas a burocracia, cálculos y papeleo. WebSocial te devuelve ese tiempo para la intervención profesional."
+            eyebrow="Propuesta de Valor"
+            title="Diseñado para resolver la complejidad de las subvenciones"
+            subtitle="Un dato se introduce una sola vez y se reutiliza en el presupuesto, cronograma, control de facturas y memoria final."
+            align="center"
           />
           <div className={styles.valueGrid}>
-            {valueProps.map((item) => (
-              <Card key={item.title} variant="elevated" hoverable>
-                <div className={styles.valueIcon}>
-                  <item.icon size={24} />
-                </div>
-                <h3 className={styles.valueTitle}>{item.title}</h3>
-                <p className={styles.valueDescription}>{item.description}</p>
-              </Card>
-            ))}
+            {valueProps.map((prop, i) => {
+              const Icon = prop.icon;
+              return (
+                <FadeIn key={prop.title} delay={i * 0.1}>
+                  <Card className={styles.valueCard} padding="lg">
+                    <div className={styles.valueIconWrapper}>
+                      <Icon size={24} />
+                    </div>
+                    <h3 className={styles.valueTitle}>{prop.title}</h3>
+                    <p className={styles.valueDescription}>{prop.description}</p>
+                  </Card>
+                </FadeIn>
+              );
+            })}
           </div>
         </Container>
       </section>
 
       {/* ═══ FEATURED TOOLS ═══ */}
-      <section className={styles.sectionAlt}>
-        <Container>
+      <section className={styles.tools}>
+        <Container size="xl">
           <SectionHeading
-            eyebrow="Herramientas profesionales"
-            title="Diseñadas para tu día a día"
-            subtitle="Calculadoras, generadores y utilidades especializadas para el sector social. Sin complicaciones."
+            eyebrow="Ecosistema de Utilidad"
+            title="Herramientas especializadas de libre acceso"
+            subtitle="Calculadoras y generadores que resuelven tareas técnicas al instante sin necesidad de registrarte."
+            align="center"
           />
           <div className={styles.toolsGrid}>
-            {featuredTools.map((tool) => (
-              <Card key={tool.name} variant="default" hoverable padding="lg">
-                <div className={styles.toolHeader}>
-                  <div className={styles.toolIcon}>
-                    <tool.icon size={22} />
-                  </div>
-                  <Badge
-                    variant={tool.tier === "free" ? "success" : "accent"}
-                    size="sm"
-                  >
-                    {tool.tier === "free" ? "Gratuita" : "PRO"}
-                  </Badge>
-                </div>
-                <h3 className={styles.toolName}>{tool.name}</h3>
-                <p className={styles.toolDescription}>{tool.description}</p>
-                <span className={styles.toolCategory}>{tool.category}</span>
-              </Card>
-            ))}
-          </div>
-          <div className={styles.toolsCta}>
-            <Button href="/herramientas" variant="outline">
-              Ver todas las herramientas
-              <ArrowRight size={16} />
-            </Button>
+            {featuredTools.map((tool, i) => {
+              const Icon = tool.icon;
+              return (
+                <FadeIn key={tool.name} delay={i * 0.08}>
+                  <Link href={tool.href} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <Card className={styles.toolCard} padding="md">
+                      <div className={styles.toolHeader}>
+                        <div className={styles.toolIconWrapper}>
+                          <Icon size={20} />
+                        </div>
+                        <Badge variant="primary" size="sm">
+                          {tool.category}
+                        </Badge>
+                      </div>
+                      <h3 className={styles.toolName}>{tool.name}</h3>
+                      <p className={styles.toolDescription}>{tool.description}</p>
+                      <div className={styles.toolFooter}>
+                        <span className={styles.toolLink}>
+                          Abrir herramienta <ArrowRight size={14} />
+                        </span>
+                      </div>
+                    </Card>
+                  </Link>
+                </FadeIn>
+              );
+            })}
           </div>
         </Container>
       </section>
 
-      {/* ═══ AUDIENCE ═══ */}
-      <section className={styles.section}>
-        <Container>
+      {/* ═══ AUDIENCES ═══ */}
+      <section className={styles.audiences}>
+        <Container size="xl">
           <SectionHeading
-            eyebrow="¿Para quién es WebSocial?"
-            title="Para profesionales que marcan la diferencia"
-            subtitle="Tanto si trabajas en una ONG, una fundación, un ayuntamiento o como profesional independiente."
+            eyebrow="Para todo el equipo"
+            title="Colaboración multi-usuario para entidades sociales"
+            subtitle="Permisos y vistas adaptadas a cada rol de tu organización."
+            align="center"
           />
-          <div className={styles.audienceGrid}>
-            {audiences.map((item) => (
-              <div key={item.title} className={styles.audienceItem}>
-                <div className={styles.audienceIcon}>
-                  <item.icon size={28} />
-                </div>
-                <div>
-                  <h3 className={styles.audienceTitle}>{item.title}</h3>
-                  <p className={styles.audienceDescription}>
-                    {item.description}
-                  </p>
-                </div>
-              </div>
-            ))}
+          <div className={styles.audiencesGrid}>
+            {audiences.map((aud, i) => {
+              const Icon = aud.icon;
+              return (
+                <FadeIn key={aud.title} delay={i * 0.1}>
+                  <Card className={styles.audienceCard} padding="lg">
+                    <div className={styles.audienceIconWrapper}>
+                      <Icon size={24} />
+                    </div>
+                    <h3 className={styles.audienceTitle}>{aud.title}</h3>
+                    <p className={styles.audienceDescription}>{aud.description}</p>
+                  </Card>
+                </FadeIn>
+              );
+            })}
           </div>
         </Container>
       </section>
 
-      {/* ═══ NEWSLETTER ═══ */}
-      <Container size="lg" className={styles.newsletterSection}>
-        <FadeIn delay={200} direction="up">
-          <NewsletterCTA />
-        </FadeIn>
-      </Container>
-
-      {/* ═══ CTA FINAL ═══ */}
-      <section className={styles.ctaSection}>
-        <Container size="lg">
-          <div className={styles.ctaCard}>
-            <h2 className={styles.ctaTitle}>
-              Empieza a simplificar tu trabajo hoy
-            </h2>
-            <p className={styles.ctaSubtitle}>
-              Accede a herramientas profesionales gratuitas diseñadas
-              específicamente para el Tercer Sector.
-            </p>
-            <div className={styles.ctaButtons}>
-              <Button href="/herramientas" size="lg" variant="secondary">
-                Explorar herramientas gratuitas
-                <ArrowRight size={18} />
-              </Button>
-              <Button href="/contacto" size="lg" variant="ghost">
-                Contactar con nosotros
-              </Button>
-            </div>
-          </div>
-        </Container>
-      </section>
+      {/* ═══ NEWSLETTER CTA ═══ */}
+      <NewsletterCTA />
     </>
   );
 }
