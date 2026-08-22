@@ -7,6 +7,7 @@ import { savePersonalMatrixAction, ProjectAllocation, Worker, PersonalMatrixData
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';
+import { ProjectBridgeBanner } from '@/components/tools/ProjectBridgeBanner';
 import styles from './personal.module.css';
 
 interface PersonalMatrixCalculatorProps {
@@ -864,6 +865,10 @@ export function PersonalMatrixCalculator({
           </button>
         </div>
       </ResultPanel>
+      <ProjectBridgeBanner 
+        toolName="Matriz de Imputación de Personal"
+        onSaveToProject={handleSaveAndSync}
+      />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
