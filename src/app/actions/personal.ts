@@ -110,13 +110,73 @@ export async function getGlobalImputationMatrixAction(): Promise<{
   projects: Array<{ id: string; name: string }>;
 }> {
   try {
-    const workers = await getOrgStaffCatalogAction();
+    const rawWorkers = await getOrgStaffCatalogAction();
     const projectsList = await getProjects();
-
     const formattedProjects = projectsList.map(p => ({ id: p.id, name: p.name }));
+    const supabase = await createClient();
+
+    // Consultar los workspaces de proyectos para obtener imputaciones directas
+    const { data: projectWorkspaces } = await supabase
+      .from('project_tools')
+      .select('project_id, data')
+      .eq('tool_slug', 'project-workspace-full');
+
+    const projectStaffMap = new Map<string, Array<{ workerId?: string; name: string; weeklyHours: number; months?: number }>>();
+    if (projectWorkspaces) {
+      projectWorkspaces.forEach(pw => {
+        const pData = pw.data as { personal?: Array<{ workerId?: string; name: string; weeklyHours: number; months?: number }> };
+        if (pData?.personal && Array.isArray(pData.personal)) {
+          projectStaffMap.set(pw.project_id, pData.personal);
+        }
+      });
+    }
+
+    // Unificar asignaciones en los trabajadores
+    const mergedWorkers: Worker[] = rawWorkers.map(w => {
+      const existingAllocations = Array.isArray(w.allocations) ? [...w.allocations] : [];
+
+      formattedProjects.forEach(proj => {
+        const assignedInProj = projectStaffMap.get(proj.id)?.find(
+          p => p.workerId === w.id || p.name.trim().toLowerCase() === w.name.trim().toLowerCase()
+        );
+
+        const allocIdx = existingAllocations.findIndex(a => a.projectId === proj.id);
+        if (assignedInProj && assignedInProj.weeklyHours > 0) {
+          if (allocIdx >= 0) {
+            existingAllocations[allocIdx] = {
+              ...existingAllocations[allocIdx],
+              projectName: proj.name,
+              weeklyHours: assignedInProj.weeklyHours,
+              months: assignedInProj.months || 12,
+            };
+          } else {
+            existingAllocations.push({
+              id: `alloc-${w.id}-${proj.id}`,
+              projectId: proj.id,
+              projectName: proj.name,
+              weeklyHours: assignedInProj.weeklyHours,
+              months: assignedInProj.months || 12,
+            });
+          }
+        } else if (allocIdx < 0) {
+          existingAllocations.push({
+            id: `alloc-${w.id}-${proj.id}`,
+            projectId: proj.id,
+            projectName: proj.name,
+            weeklyHours: 0,
+            months: 12,
+          });
+        }
+      });
+
+      return {
+        ...w,
+        allocations: existingAllocations,
+      };
+    });
 
     return {
-      workers,
+      workers: mergedWorkers,
       projects: formattedProjects,
     };
   } catch (err) {
@@ -154,59 +214,99 @@ export async function savePersonalMatrixAction(
       await saveToolData(currentProjectId, 'gestion-personal', matrixData);
     }
 
-    // 3. Sincronizar imputaciones con los costes de los proyectos reales
+    // 3. Sincronizar imputaciones con los costes y el workspace de los proyectos reales
     if (syncWithProjects && Array.isArray(matrixData.workers)) {
-      const projectWorkerMap = new Map<string, Array<{ worker: Worker; alloc: ProjectAllocation }>>();
+      const projectsList = await getProjects();
+      const allProjectIds = projectsList.map(p => p.id);
 
-      matrixData.workers.forEach(worker => {
-        worker.allocations.forEach(alloc => {
-          if (alloc.projectId && alloc.projectId !== 'sede') {
-            const list = projectWorkerMap.get(alloc.projectId) || [];
-            list.push({ worker, alloc });
-            projectWorkerMap.set(alloc.projectId, list);
-          }
-        });
-      });
-
-      for (const [targetProjectId, assignments] of projectWorkerMap.entries()) {
+      for (const targetProjectId of allProjectIds) {
         try {
-          const currentCostes = await getToolData(targetProjectId, 'costes-proyecto') as Record<string, unknown> | null;
-          const existingPartidas = Array.isArray(currentCostes?.partidas) 
-            ? (currentCostes.partidas as Array<Record<string, unknown>>) 
-            : [];
+          // Obtener las asignaciones para este proyecto
+          const projectAssignments = matrixData.workers
+            .map(worker => {
+              const alloc = worker.allocations.find(a => a.projectId === targetProjectId);
+              return alloc && alloc.weeklyHours > 0 ? { worker, alloc } : null;
+            })
+            .filter((item): item is { worker: Worker; alloc: ProjectAllocation } => item !== null);
 
-          const nonPersonalPartidas = existingPartidas.filter(
-            p => p.category !== 'personal' || (typeof p.id === 'string' && !p.id.startsWith('staff-'))
-          );
+          // 1. Obtener workspace actual
+          const currentWorkspaceRaw = await getToolData(targetProjectId, 'project-workspace-full') as Record<string, unknown> | null;
+          
+          // 2. Construir lista de personal para el workspace
+          const updatedPersonalList = projectAssignments.map(({ worker, alloc }) => ({
+            id: `pers-${worker.id}`,
+            workerId: worker.id,
+            name: worker.name,
+            role: worker.role,
+            contractType: worker.contractType || 'Indefinido',
+            monthlySalary: worker.salaryMonthly,
+            ssPct: worker.ssPct || 31.4,
+            weeklyHours: alloc.weeklyHours,
+            maxWeeklyHours: worker.maxWeeklyHours || 37.5,
+            months: alloc.months || 12,
+          }));
 
-          const newPersonalPartidas = assignments.map(({ worker, alloc }) => {
+          // 3. Construir partidas presupuestarias de personal
+          const newPersonalPartidas = projectAssignments.map(({ worker, alloc }) => {
             const salMes = worker.pagas === 14 ? (worker.salaryMonthly * 14) / 12 : worker.salaryMonthly;
             const ssMes = (salMes * (worker.ssPct || 31.4)) / 100;
             const costeEmpresaMes = salMes + ssMes;
             const pct = (worker.maxWeeklyHours || 37.5) > 0 ? (alloc.weeklyHours / (worker.maxWeeklyHours || 37.5)) : 1;
-            const costeImputadoMes = Math.round(costeEmpresaMes * pct);
+            const costeImputadoMes = Number((costeEmpresaMes * pct).toFixed(2));
 
             return {
-              id: `staff-${worker.id}`,
+              id: `p-${worker.id}`,
               category: 'personal',
-              description: `${worker.name || worker.role} (${worker.role})`,
-              puesto: `${worker.role} - ${worker.category || ''}`.trim(),
-              funciones: `Imputación de ${alloc.weeklyHours}h/sem (${(pct * 100).toFixed(0)}% jornada de ${worker.maxWeeklyHours}h).`,
+              description: `${worker.name} (${worker.role} - ${alloc.weeklyHours}h/sem)`,
               monthlyAmount: costeImputadoMes,
               months: alloc.months || 12,
-              costeReal: costeImputadoMes * (alloc.months || 12),
+              costeReal: Number((costeImputadoMes * (alloc.months || 12)).toFixed(2)),
+              workerId: worker.id,
             };
           });
 
+          // 4. Actualizar costes-proyecto
+          const currentCostes = (await getToolData(targetProjectId, 'costes-proyecto') as Record<string, unknown> | null) || {};
+          const existingPartidas = Array.isArray(currentCostes.partidas) 
+            ? (currentCostes.partidas as Array<Record<string, unknown>>) 
+            : [];
+          const nonPersonalPartidas = existingPartidas.filter(
+            p => p.category !== 'personal' || (typeof p.id === 'string' && !p.id.startsWith('staff-') && !p.id.startsWith('p-'))
+          );
+
           const updatedCostesPayload = {
-            ...(currentCostes || {}),
+            ...currentCostes,
             partidas: [...newPersonalPartidas, ...nonPersonalPartidas],
           };
 
           await saveToolData(targetProjectId, 'costes-proyecto', updatedCostesPayload);
+          await saveToolData(targetProjectId, 'personal-proyecto', { workers: updatedPersonalList });
+
+          // 5. Si existe workspace completo, actualizar su personal y presupuesto
+          if (currentWorkspaceRaw) {
+            const workspacePresupuesto = (currentWorkspaceRaw.presupuesto as Record<string, unknown>) || {};
+            const workspaceExistingPartidas = Array.isArray(workspacePresupuesto.partidas)
+              ? (workspacePresupuesto.partidas as Array<Record<string, unknown>>)
+              : [];
+            const workspaceNonPersonal = workspaceExistingPartidas.filter(
+              p => p.category !== 'personal'
+            );
+
+            const updatedWorkspace = {
+              ...currentWorkspaceRaw,
+              personal: updatedPersonalList,
+              presupuesto: {
+                ...workspacePresupuesto,
+                partidas: [...newPersonalPartidas, ...workspaceNonPersonal],
+              }
+            };
+
+            await saveToolData(targetProjectId, 'project-workspace-full', updatedWorkspace);
+          }
+
           revalidatePath(`/dashboard/proyectos/${targetProjectId}`);
         } catch (syncErr) {
-          console.error(`Error sincronizando costes para proyecto ${targetProjectId}:`, syncErr);
+          console.error(`Error sincronizando proyecto ${targetProjectId} desde matriz:`, syncErr);
         }
       }
     }

@@ -11,6 +11,7 @@ export interface Worker {
   name: string;
   role: string;
   category: string;
+  contractType?: string;
   salaryMonthly: number;
   pagas: number;
   ssPct: number;

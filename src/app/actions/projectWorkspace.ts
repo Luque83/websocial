@@ -221,6 +221,82 @@ export async function saveProjectWorkspaceAction(projectId: string, data: Projec
       .upsert(record as any, { onConflict: 'project_id, tool_slug' });
   }
 
+  // 3. Sincronizar bidireccionalmente la asignación de personal hacia la Matriz de Imputación y Catálogo de la entidad
+  try {
+    const { data: staffCatalogRecord } = await supabase
+      .from('project_tools')
+      .select('data')
+      .eq('tool_slug', 'org-staff-catalog')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (staffCatalogRecord?.data && Array.isArray((staffCatalogRecord.data as any).workers)) {
+      const catalogWorkers = (staffCatalogRecord.data as any).workers as Array<{
+        id: string;
+        name: string;
+        role: string;
+        salaryMonthly: number;
+        ssPct?: number;
+        maxWeeklyHours?: number;
+        allocations: Array<{
+          id: string;
+          projectId: string;
+          projectName: string;
+          weeklyHours: number;
+          months?: number;
+        }>;
+      }>;
+
+      const updatedCatalog = catalogWorkers.map(cw => {
+        const assignedInProject = (data.personal || []).find(
+          p => p.workerId === cw.id || p.name.trim().toLowerCase() === cw.name.trim().toLowerCase()
+        );
+
+        const currentAllocations = Array.isArray(cw.allocations) ? [...cw.allocations] : [];
+        const allocIdx = currentAllocations.findIndex(a => a.projectId === projectId);
+
+        if (assignedInProject && assignedInProject.weeklyHours > 0) {
+          if (allocIdx >= 0) {
+            currentAllocations[allocIdx] = {
+              ...currentAllocations[allocIdx],
+              projectName: data.diagnostico.projectName || currentAllocations[allocIdx].projectName,
+              weeklyHours: assignedInProject.weeklyHours,
+              months: assignedInProject.months || 12,
+            };
+          } else {
+            currentAllocations.push({
+              id: `alloc-${cw.id}-${projectId}`,
+              projectId: projectId,
+              projectName: data.diagnostico.projectName || 'Proyecto',
+              weeklyHours: assignedInProject.weeklyHours,
+              months: assignedInProject.months || 12,
+            });
+          }
+        } else if (allocIdx >= 0) {
+          currentAllocations[allocIdx].weeklyHours = 0;
+        }
+
+        return {
+          ...cw,
+          allocations: currentAllocations,
+        };
+      });
+
+      // Guardar el catálogo central actualizado
+      await supabase
+        .from('project_tools')
+        .upsert({
+          project_id: projectId,
+          tool_slug: 'org-staff-catalog',
+          data: { workers: updatedCatalog, updatedAt: new Date().toISOString() },
+          updated_at: new Date().toISOString(),
+        } as any, { onConflict: 'project_id, tool_slug' });
+    }
+  } catch (syncErr) {
+    console.error('Error sincronizando personal con matriz general:', syncErr);
+  }
+
   return { success: true, savedAt: new Date().toISOString() };
 }
 
