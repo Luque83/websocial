@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { mainNavigation } from '@/config/navigation';
+import { Logo } from '@/components/ui/Logo';
 import styles from './Header.module.css';
 
 import { createClient } from '@/lib/supabase/client';
@@ -55,9 +56,7 @@ export function Header() {
     <header className={`${styles.header} ${isScrolled ? styles.scrolled : ''}`}>
       <div className={styles.container}>
         <div className={styles.logoContainer}>
-          <Link href="/" className={styles.logo}>
-            WebSocial<span className={styles.accentDot}>.</span>
-          </Link>
+          <Logo size="md" href="/" />
         </div>
 
         <nav className={styles.desktopNav}>

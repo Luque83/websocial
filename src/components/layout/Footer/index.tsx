@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { footerNavigation } from '@/config/navigation';
 import { siteConfig } from '@/config/site';
+import { Logo } from '@/components/ui/Logo';
 import styles from './Footer.module.css';
 
 export function Footer() {
@@ -12,9 +13,7 @@ export function Footer() {
       <div className={styles.container}>
         <div className={styles.topSection}>
           <div className={styles.brandColumn}>
-            <Link href="/" className={styles.logo}>
-              WebSocial
-            </Link>
+            <Logo size="md" href="/" />
             <p className={styles.tagline}>
               Tecnología con propósito humano
             </p>

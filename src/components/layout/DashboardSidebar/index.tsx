@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, LogOut, UserCircle, FolderKanban, ShieldCheck, Users } from 'lucide-react';
 import { signOutAction } from '@/app/(dashboard)/actions';
+import { Logo } from '@/components/ui/Logo';
 import styles from './DashboardSidebar.module.css';
 
 interface DashboardSidebarProps {
@@ -26,9 +27,7 @@ export function DashboardSidebar({ userEmail, recentProjects }: DashboardSidebar
   return (
     <aside className={styles.sidebar}>
       <div className={styles.logo}>
-        <Link href="/dashboard">
-          WebSocial<span>.</span>
-        </Link>
+        <Logo size="md" href="/dashboard" />
       </div>
 
       <nav className={styles.nav}>
