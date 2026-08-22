@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, LogOut, UserCircle, FolderKanban, ShieldCheck, Users } from 'lucide-react';
+import { LayoutDashboard, LogOut, UserCircle, FolderKanban, ShieldCheck, Users, Sparkles, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import { signOutAction } from '@/app/(dashboard)/actions';
 import { Logo } from '@/components/ui/Logo';
 import styles from './DashboardSidebar.module.css';
@@ -11,24 +11,71 @@ import styles from './DashboardSidebar.module.css';
 interface DashboardSidebarProps {
   userEmail?: string;
   recentProjects?: Array<{ id: string; name: string }>;
+  isAdmin?: boolean;
 }
 
-export function DashboardSidebar({ userEmail, recentProjects }: DashboardSidebarProps) {
+export function DashboardSidebar({ userEmail, recentProjects, isAdmin = false }: DashboardSidebarProps) {
   const pathname = usePathname();
+  const [viewMode, setViewMode] = useState<'admin' | 'client'>(isAdmin ? 'admin' : 'client');
 
-  const navItems = [
+  const showAdminMenu = isAdmin && viewMode === 'admin';
+
+  const baseNavItems = [
     { name: 'Mis Proyectos', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Equipo y Permisos', href: '/dashboard/equipo', icon: Users },
     { name: 'Plantilla y Personal', href: '/herramientas/gestion-personal', icon: UserCircle },
     { name: 'Mi Entidad / Perfil', href: '/dashboard/perfil', icon: UserCircle },
-    { name: 'Panel Comercial', href: '/dashboard/admin', icon: ShieldCheck },
   ];
+
+  const navItems = showAdminMenu 
+    ? [...baseNavItems, { name: 'Panel Comercial', href: '/dashboard/admin', icon: ShieldCheck }]
+    : baseNavItems;
 
   return (
     <aside className={styles.sidebar}>
       <div className={styles.logo}>
-        <Logo size="md" href="/dashboard" />
+        <Logo size="md" href="/" />
       </div>
+
+      {/* Switcher de Vista Exclusivo para el SuperAdmin */}
+      {isAdmin && (
+        <div style={{
+          margin: '0 1rem 1rem 1rem',
+          padding: '0.65rem 0.85rem',
+          background: viewMode === 'admin' ? '#0D3A5F' : '#EAF5FB',
+          border: `1.5px solid ${viewMode === 'admin' ? '#16C7B2' : '#CBD5E1'}`,
+          borderRadius: '10px',
+          color: viewMode === 'admin' ? 'white' : '#0D3A5F',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: viewMode === 'admin' ? '#16C7B2' : '#009E96' }}>
+              {viewMode === 'admin' ? '👑 Modo Gestor (Admin)' : '🏢 Vista Cliente (ONG)'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setViewMode(prev => prev === 'admin' ? 'client' : 'admin')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: viewMode === 'admin' ? '#16C7B2' : '#0D3A5F',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.2rem',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                padding: 0
+              }}
+              title="Cambiar vista para probar la experiencia de cliente"
+            >
+              {viewMode === 'admin' ? <ToggleRight size={20} color="#16C7B2" /> : <ToggleLeft size={20} color="#5C7E9B" />}
+            </button>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: viewMode === 'admin' ? 'rgba(255,255,255,0.8)' : '#5C7E9B', lineHeight: 1.3 }}>
+            {viewMode === 'admin' ? 'Acceso a Panel Comercial y facturación.' : 'Viendo el panel exactamente como una ONG cliente.'}
+          </p>
+        </div>
+      )}
 
       <nav className={styles.nav}>
         <ul className={styles.navList}>
@@ -74,7 +121,9 @@ export function DashboardSidebar({ userEmail, recentProjects }: DashboardSidebar
             {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
           </div>
           <div className={styles.userDetails}>
-            <span className={styles.userName}>Usuario</span>
+            <span className={styles.userName}>
+              {isAdmin ? '👑 Gestor / SuperAdmin' : '🏢 Entidad Social'}
+            </span>
             <span className={styles.userEmail}>{userEmail || 'Cargando...'}</span>
           </div>
         </div>
@@ -89,3 +138,5 @@ export function DashboardSidebar({ userEmail, recentProjects }: DashboardSidebar
     </aside>
   );
 }
+
+export default DashboardSidebar;

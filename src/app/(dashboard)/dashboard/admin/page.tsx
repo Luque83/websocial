@@ -2,6 +2,7 @@ import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { getAdminCommercialMetrics } from '@/app/actions/admin';
+import { isSuperAdmin } from '@/lib/auth/roles';
 import { AdminClientManager } from './AdminClientManager';
 
 export const metadata = {
@@ -15,6 +16,10 @@ export default async function AdminPage() {
 
   if (!user) {
     redirect('/login');
+  }
+
+  if (!isSuperAdmin(user.email)) {
+    redirect('/dashboard');
   }
 
   const metrics = await getAdminCommercialMetrics();
