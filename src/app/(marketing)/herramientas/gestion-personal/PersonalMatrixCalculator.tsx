@@ -3,7 +3,8 @@
 import React, { useState, useId } from 'react';
 import { Plus, Trash2, User, Users, Briefcase, CheckCircle2, AlertTriangle, AlertCircle, FileSpreadsheet, Building2, PieChart, RefreshCw, Calculator, TrendingUp, Sparkles } from 'lucide-react';
 import { ResultPanel } from '@/components/tools/ResultPanel';
-import { savePersonalMatrixAction, ProjectAllocation, Worker, PersonalMatrixData } from '@/app/actions/personal';
+import { savePersonalMatrixAction } from '@/app/actions/personal';
+import type { ProjectAllocation, Worker, PersonalMatrixData } from '@/config/staff';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ExportPdfButton } from '@/components/ui/ExportPdfButton';

@@ -35,8 +35,8 @@ import {
 import { saveProjectWorkspaceAction, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
 import { analyzeConvocatoriaAction } from '@/app/actions/ai-analyzer';
 import { uploadProjectDocumentAction } from '@/app/actions/storage';
-import { extractTextFromPdfAction } from '@/app/actions/pdf-extractor';
-import { getOrgStaffCatalogAction, DEFAULT_STAFF_CATALOG, type Worker as OrgWorker } from '@/app/actions/personal';
+import { getOrgStaffCatalogAction } from '@/app/actions/personal';
+import { DEFAULT_STAFF_CATALOG, type Worker as OrgWorker } from '@/config/staff';
 import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
 import styles from './ProjectWorkspace.module.css';
 
