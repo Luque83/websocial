@@ -14,6 +14,18 @@ export interface ProjectWorkspaceData {
     justification: string;
     diagnosticText: string;
   };
+  subvencion: {
+    organismo: string;
+    linea: string;
+    expedienteNum: string;
+    importeSolicitado: number;
+    importeConcedido: number;
+    aportacionPropia: number;
+    fechaInicio: string;
+    fechaFin: string;
+    fechaLimiteJustificacion: string;
+    estadoSubvencion: 'solicitud' | 'concedida' | 'ejecucion' | 'justificacion' | 'cerrada';
+  };
   marcoLogico: {
     fin: string;
     proposito: string;
@@ -33,6 +45,12 @@ export interface ProjectWorkspaceData {
           id: string;
           description: string;
           responsible: string;
+          evidencias?: Array<{
+            id: string;
+            tipo: 'firmas' | 'fotos' | 'informe' | 'encuesta' | 'otro';
+            descripcion: string;
+            estado: 'pendiente' | 'aportada' | 'validada';
+          }>;
         }>;
       }>;
     }>;
@@ -71,6 +89,19 @@ export interface ProjectWorkspaceData {
     indirectPct: number;
     grantAmount: number;
   };
+  gastosFacturas: Array<{
+    id: string;
+    proveedor: string;
+    nif: string;
+    numFactura: string;
+    fecha: string;
+    concepto: string;
+    totalFactura: number;
+    pctImputado: number;
+    importeImputado: number;
+    partidaId: string;
+    justificantePago: boolean;
+  }>;
   cronograma: {
     durationMonths: number;
     activities: Array<{
