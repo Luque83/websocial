@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, 
@@ -29,12 +29,14 @@ import {
   Bot,
   ExternalLink,
   BookOpen,
+  UserCheck,
   X
 } from 'lucide-react';
 import { saveProjectWorkspaceAction, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
 import { analyzeConvocatoriaAction } from '@/app/actions/ai-analyzer';
 import { uploadProjectDocumentAction } from '@/app/actions/storage';
 import { extractTextFromPdfAction } from '@/app/actions/pdf-extractor';
+import { getOrgStaffCatalogAction, DEFAULT_STAFF_CATALOG, type Worker as OrgWorker } from '@/app/actions/personal';
 import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
 import styles from './ProjectWorkspace.module.css';
 
@@ -62,6 +64,19 @@ export function ProjectWorkspace({
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Staff Catalog States (Importar de Plantilla de la Entidad)
+  const [staffCatalog, setStaffCatalog] = useState<OrgWorker[]>(DEFAULT_STAFF_CATALOG);
+  const [isImportStaffModalOpen, setIsImportStaffModalOpen] = useState(false);
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    getOrgStaffCatalogAction().then((catalog) => {
+      if (Array.isArray(catalog) && catalog.length > 0) {
+        setStaffCatalog(catalog);
+      }
+    });
+  }, []);
 
   // AI Modal States
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -1253,27 +1268,60 @@ export function ProjectWorkspace({
       {/* TAB 4: PERSONAL E IMPUTACIONES */}
       {activeTab === 'personal' && (
         <div className={styles.contentCard}>
+          <datalist id="staff-catalog-datalist">
+            {staffCatalog.map(w => (
+              <option key={w.id} value={w.name}>
+                {w.role} - Bruto: {w.salaryMonthly} €/mes
+              </option>
+            ))}
+          </datalist>
+
           <div className={styles.sectionHeader}>
             <div>
               <h2 className={styles.sectionTitle}><Users size={20} color="#2563eb" /> 4. Personal y Horas Imputadas a la Subvención</h2>
-              <p className={styles.sectionSubtitle}>Asigna las nóminas, jornada semanal y meses de dedicación a este proyecto.</p>
+              <p className={styles.sectionSubtitle}>Asigna las nóminas, jornada semanal y meses de dedicación a este proyecto. Puedes importar los trabajadores reales de la plantilla de tu entidad con sus salarios brutos.</p>
             </div>
-            <button
-              type="button"
-              onClick={syncPersonalToBudget}
-              className={styles.exportBtn}
-            >
-              🔄 Trasladar al Presupuesto
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStaffIds(staffCatalog.map(w => w.id));
+                  setIsImportStaffModalOpen(true);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: '#0D3A5F',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(13, 58, 95, 0.25)'
+                }}
+              >
+                <Users size={16} color="#16C7B2" /> 👥 Importar de la Plantilla ({staffCatalog.length})
+              </button>
+              <button
+                type="button"
+                onClick={syncPersonalToBudget}
+                className={styles.exportBtn}
+              >
+                🔄 Trasladar al Presupuesto
+              </button>
+            </div>
           </div>
 
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Nombre del Trabajador/a</th>
+                  <th style={{ minWidth: '220px' }}>Nombre del Trabajador/a</th>
                   <th>Categoría / Puesto</th>
-                  <th>Bruto / Mes</th>
+                  <th>Bruto / Mes (€)</th>
                   <th>SS Patronal (%)</th>
                   <th>Horas/sem</th>
                   <th>Meses</th>
@@ -1293,17 +1341,70 @@ export function ProjectWorkspace({
                   return (
                     <tr key={worker.id} style={{ background: isOverLimit ? '#fef2f2' : 'inherit' }}>
                       <td>
-                        <input
-                          type="text"
-                          className={styles.input}
-                          value={worker.name}
-                          onChange={e => {
-                            const newP = [...personal];
-                            newP[idx].name = e.target.value;
-                            setPersonal(newP);
-                            handleModify();
-                          }}
-                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                          <input
+                            type="text"
+                            list="staff-catalog-datalist"
+                            className={styles.input}
+                            placeholder="Nombre o busca en plantilla..."
+                            value={worker.name}
+                            onChange={e => {
+                              const val = e.target.value;
+                              const matched = staffCatalog.find(w => w.name.toLowerCase() === val.toLowerCase());
+                              const newP = [...personal];
+                              if (matched) {
+                                newP[idx] = {
+                                  ...newP[idx],
+                                  name: matched.name,
+                                  role: matched.role || newP[idx].role,
+                                  monthlySalary: matched.salaryMonthly || newP[idx].monthlySalary,
+                                  ssPct: matched.ssPct || newP[idx].ssPct,
+                                  maxWeeklyHours: matched.maxWeeklyHours || newP[idx].maxWeeklyHours,
+                                };
+                              } else {
+                                newP[idx].name = val;
+                              }
+                              setPersonal(newP);
+                              handleModify();
+                            }}
+                          />
+                          <select
+                            style={{
+                              fontSize: '0.75rem',
+                              padding: '0.25rem 0.5rem',
+                              borderRadius: '6px',
+                              border: '1.5px solid #D5ECF8',
+                              background: '#EAF5FB',
+                              color: '#0D3A5F',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                            value=""
+                            onChange={e => {
+                              const found = staffCatalog.find(w => w.id === e.target.value);
+                              if (found) {
+                                const newP = [...personal];
+                                newP[idx] = {
+                                  ...newP[idx],
+                                  name: found.name,
+                                  role: found.role,
+                                  monthlySalary: found.salaryMonthly,
+                                  ssPct: found.ssPct || 31.4,
+                                  maxWeeklyHours: found.maxWeeklyHours || 37.5,
+                                };
+                                setPersonal(newP);
+                                handleModify();
+                              }
+                            }}
+                          >
+                            <option value="">⚡ Cargar datos de plantilla...</option>
+                            {staffCatalog.map(w => (
+                              <option key={w.id} value={w.id}>
+                                {w.name} · {w.role} ({w.salaryMonthly} €/m)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
                       <td>
                         <input
@@ -1421,7 +1522,30 @@ export function ProjectWorkspace({
               }}
               className={styles.addSmallBtn}
             >
-              <Plus size={16} /> Añadir Trabajador/a
+              <Plus size={16} /> Añadir Fila Manual
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedStaffIds(staffCatalog.map(w => w.id));
+                setIsImportStaffModalOpen(true);
+              }}
+              style={{
+                background: '#EAF5FB',
+                color: '#0D3A5F',
+                border: '1.5px solid #D5ECF8',
+                padding: '0.45rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.8125rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <UserCheck size={16} color="#16C7B2" /> Ver y Seleccionar de la Plantilla Oficial
             </button>
           </div>
 
@@ -2382,6 +2506,175 @@ export function ProjectWorkspace({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE IMPORTACIÓN DE PLANTILLA DE LA ENTIDAD */}
+      {isImportStaffModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalContent} style={{ maxWidth: '750px' }}>
+            <div className={styles.modalHeader} style={{ background: '#0D3A5F', color: 'white' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.125rem', color: 'white' }}>
+                <Users size={22} color="#16C7B2" /> Importar Personal de la Plantilla de la Entidad
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setIsImportStaffModalOpen(false)} 
+                className={styles.modalCloseBtn}
+                style={{ color: 'white' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                Selecciona los trabajadores registrados en tu entidad para importarlos automáticamente con su <strong>categoría profesional, salario bruto real y jornada legal</strong>. Podrás editar cualquier importe en el proyecto según la dedicación concedida.
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0' }}>
+                <span style={{ fontSize: '0.8125rem', color: '#5C7E9B', fontWeight: 600 }}>
+                  Plantilla disponible: <strong>{staffCatalog.length}</strong> trabajadores registrados
+                </span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStaffIds(staffCatalog.map(w => w.id))}
+                    style={{
+                      background: '#EAF5FB',
+                      border: '1px solid #D5ECF8',
+                      color: '#0D3A5F',
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Seleccionar Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStaffIds([])}
+                    style={{
+                      background: '#f1f5f9',
+                      border: '1px solid #e2e8f0',
+                      color: '#64748b',
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Desmarcar Todos
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ maxHeight: '320px', overflowY: 'auto', border: '1.5px solid #D5ECF8', borderRadius: '10px' }}>
+                <table className={styles.table} style={{ margin: 0 }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 5, background: '#F8FAFC' }}>
+                    <tr>
+                      <th style={{ width: '40px' }}></th>
+                      <th>Trabajador/a</th>
+                      <th>Puesto / Categoría</th>
+                      <th className={styles.numCol}>Salario Bruto / Mes</th>
+                      <th>Jornada Legal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {staffCatalog.map((worker) => {
+                      const isSelected = selectedStaffIds.includes(worker.id);
+                      return (
+                        <tr 
+                          key={worker.id} 
+                          style={{ background: isSelected ? '#F0FDFA' : 'inherit', cursor: 'pointer' }}
+                          onClick={() => {
+                            setSelectedStaffIds(prev => 
+                              prev.includes(worker.id) 
+                                ? prev.filter(id => id !== worker.id) 
+                                : [...prev, worker.id]
+                            );
+                          }}
+                        >
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                            />
+                          </td>
+                          <td>
+                            <strong style={{ color: '#0D3A5F' }}>{worker.name}</strong>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.8125rem', color: '#475569' }}>
+                              {worker.role} {worker.category ? `(${worker.category})` : ''}
+                            </span>
+                          </td>
+                          <td className={styles.numCol}>
+                            <span style={{
+                              background: '#EAF5FB',
+                              color: '#009E96',
+                              fontWeight: 800,
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '6px',
+                              fontSize: '0.8125rem'
+                            }}>
+                              {worker.salaryMonthly.toLocaleString('es-ES')} €/mes
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                              {worker.maxWeeklyHours || 37.5} h/semana
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsImportStaffModalOpen(false)}
+                  className={styles.exportBtn}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedStaffIds.length === 0}
+                  onClick={() => {
+                    const toImport = staffCatalog.filter(w => selectedStaffIds.includes(w.id));
+                    const newEntries = toImport.map(w => ({
+                      id: `pers-${Date.now()}-${w.id}`,
+                      name: w.name,
+                      role: w.role || 'Técnico de Proyecto',
+                      contractType: 'Indefinido',
+                      monthlySalary: w.salaryMonthly || 1800,
+                      ssPct: w.ssPct || 31.4,
+                      weeklyHours: w.maxWeeklyHours || 37.5,
+                      maxWeeklyHours: w.maxWeeklyHours || 37.5,
+                      months: 12,
+                    }));
+                    setPersonal(prev => [...prev, ...newEntries]);
+                    setIsImportStaffModalOpen(false);
+                    setSelectedStaffIds([]);
+                    handleModify();
+                  }}
+                  className={styles.saveBtn}
+                  style={{ background: '#0D3A5F', color: 'white' }}
+                >
+                  <UserCheck size={16} color="#16C7B2" /> Importar {selectedStaffIds.length} Trabajador/es al Proyecto
+                </button>
+              </div>
             </div>
           </div>
         </div>
