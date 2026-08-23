@@ -224,9 +224,18 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
       formattedProjects.forEach(proj => {
         const wData = workspaceMap.get(proj.id);
         const pToolWorkers = personalToolMap.get(proj.id) || [];
-        const projectStaffList: any[] = (wData?.personal && Array.isArray(wData.personal)) 
+        const projectStaffList: any[] = (wData?.personal && Array.isArray(wData.personal) && wData.personal.length > 0) 
           ? wData.personal 
           : pToolWorkers;
+
+        // También verificar si existen partidas de personal en el presupuesto del proyecto
+        const projectBudgetPartidas = (wData?.presupuesto && Array.isArray(wData.presupuesto.partidas))
+          ? wData.presupuesto.partidas
+          : (costesToolMap.get(proj.id)?.partidas || []);
+        
+        const matchingPartida = Array.isArray(projectBudgetPartidas)
+          ? projectBudgetPartidas.find((p: any) => p.category === 'personal' && (p.workerId === w.id || p.workerId === `pers-${w.id}` || isWorkerMatch(w, { name: p.description })))
+          : null;
 
         const assignedInProj = projectStaffList.find((p: any) => isWorkerMatch(w, p));
 
@@ -237,32 +246,39 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
         if (assignedInProj && assignedInProj.weeklyHours > 0) {
           activeHours = assignedInProj.weeklyHours;
           activeMonths = assignedInProj.months || 12;
-          if (allocIdx >= 0) {
-            existingAllocations[allocIdx] = {
-              ...existingAllocations[allocIdx],
-              projectName: proj.name,
-              weeklyHours: activeHours,
-              months: activeMonths,
-            };
-          } else {
-            existingAllocations.push({
-              id: `alloc-${w.id}-${proj.id}`,
-              projectId: proj.id,
-              projectName: proj.name,
-              weeklyHours: activeHours,
-              months: activeMonths,
-            });
-          }
-        } else if (allocIdx >= 0) {
-          activeHours = existingAllocations[allocIdx].weeklyHours || 0;
+        } else if (matchingPartida && matchingPartida.monthlyAmount > 0) {
+          // Extraer horas de la partida presupuestaria reformulada
+          const pctFromCost = costeEmpresaMes > 0 ? (matchingPartida.monthlyAmount / costeEmpresaMes) : 0;
+          activeHours = Number((pctFromCost * maxH).toFixed(2));
+          activeMonths = matchingPartida.months || 12;
+        } else if (allocIdx >= 0 && existingAllocations[allocIdx].weeklyHours > 0) {
+          activeHours = existingAllocations[allocIdx].weeklyHours;
           activeMonths = existingAllocations[allocIdx].months || 12;
+        } else if (!wData && (!projectStaffList || projectStaffList.length === 0)) {
+          // Si el proyecto aún no se ha personalizado ni guardado en BD, usar la plantilla base por defecto
+          if (w.name.includes('Elena') || w.id === 'w-1') {
+            activeHours = 20;
+            activeMonths = 12;
+          } else if (w.name.includes('Carlos') || w.id === 'w-2') {
+            activeHours = 18.75;
+            activeMonths = 10;
+          }
+        }
+
+        if (allocIdx >= 0) {
+          existingAllocations[allocIdx] = {
+            ...existingAllocations[allocIdx],
+            projectName: proj.name,
+            weeklyHours: activeHours,
+            months: activeMonths,
+          };
         } else {
           existingAllocations.push({
             id: `alloc-${w.id}-${proj.id}`,
             projectId: proj.id,
             projectName: proj.name,
-            weeklyHours: 0,
-            months: 12,
+            weeklyHours: activeHours,
+            months: activeMonths,
           });
         }
 

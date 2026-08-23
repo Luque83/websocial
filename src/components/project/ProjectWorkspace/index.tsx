@@ -604,20 +604,23 @@ export function ProjectWorkspace({
     }
   };
 
-  // 5. ACTIONS
-  const syncPersonalToBudget = () => {
-    const newPersonalPartidas = personal.map(worker => {
-      const costeEmpresaMes = worker.monthlySalary * (1 + worker.ssPct / 100);
-      const pct = worker.maxWeeklyHours > 0 ? (worker.weeklyHours / worker.maxWeeklyHours) : 1;
+  // 5. ACTIONS: Auto-sincronización bidireccional Personal <-> Presupuesto
+  const updatePersonalAndBudget = (newPersonal: ProjectWorkspaceData['personal']) => {
+    setPersonal(newPersonal);
+    const newPersonalPartidas = newPersonal.map(worker => {
+      const costeEmpresaMes = worker.monthlySalary * (1 + (worker.ssPct || 31.4) / 100);
+      const maxH = worker.maxWeeklyHours || 37.5;
+      const pct = maxH > 0 ? (worker.weeklyHours / maxH) : 1;
       const costeMesImputado = Number((costeEmpresaMes * pct).toFixed(2));
+      const totalCoste = Number((costeMesImputado * (worker.months || 12)).toFixed(2));
       return {
         id: `p-${worker.id}`,
         category: 'personal',
-        description: `${worker.name} (${worker.role} - ${worker.weeklyHours}h/sem)`,
+        description: `${worker.name || 'Técnico'} (${worker.role} - ${worker.weeklyHours}h/sem)`,
         monthlyAmount: costeMesImputado,
         months: worker.months || 12,
-        costeReal: Number((costeMesImputado * (worker.months || 12)).toFixed(2)),
-        workerId: worker.id
+        costeReal: totalCoste,
+        workerId: worker.id,
       };
     });
 
@@ -626,7 +629,11 @@ export function ProjectWorkspace({
       ...prev,
       partidas: [...newPersonalPartidas, ...otherPartidas]
     }));
-    setHasChanges(true);
+    handleModify();
+  };
+
+  const syncPersonalToBudget = () => {
+    updatePersonalAndBudget(personal);
   };
 
   const syncMLToCronograma = () => {
@@ -1855,8 +1862,7 @@ export function ProjectWorkspace({
                                   } else {
                                     newP[idx].name = val;
                                   }
-                                  setPersonal(newP);
-                                  handleModify();
+                                  updatePersonalAndBudget(newP);
                                 }}
                               />
                               <select
@@ -1883,8 +1889,7 @@ export function ProjectWorkspace({
                                       ssPct: found.ssPct || 31.4,
                                       maxWeeklyHours: found.maxWeeklyHours || 37.5,
                                     };
-                                    setPersonal(newP);
-                                    handleModify();
+                                    updatePersonalAndBudget(newP);
                                   }
                                 }}
                               >
@@ -1905,8 +1910,7 @@ export function ProjectWorkspace({
                               onChange={e => {
                                 const newP = [...personal];
                                 newP[idx].role = e.target.value;
-                                setPersonal(newP);
-                                handleModify();
+                                updatePersonalAndBudget(newP);
                               }}
                             />
                           </td>
@@ -1919,8 +1923,7 @@ export function ProjectWorkspace({
                               onChange={e => {
                                 const newP = [...personal];
                                 newP[idx].monthlySalary = parseFloat(e.target.value) || 0;
-                                setPersonal(newP);
-                                handleModify();
+                                updatePersonalAndBudget(newP);
                               }}
                             />
                           </td>
@@ -1934,8 +1937,7 @@ export function ProjectWorkspace({
                               onChange={e => {
                                 const newP = [...personal];
                                 newP[idx].ssPct = parseFloat(e.target.value) || 0;
-                                setPersonal(newP);
-                                handleModify();
+                                updatePersonalAndBudget(newP);
                               }}
                             />
                           </td>
@@ -1948,8 +1950,7 @@ export function ProjectWorkspace({
                               onChange={e => {
                                 const newP = [...personal];
                                 newP[idx].weeklyHours = parseFloat(e.target.value) || 0;
-                                setPersonal(newP);
-                                handleModify();
+                                updatePersonalAndBudget(newP);
                               }}
                             />
                           </td>
@@ -1962,8 +1963,7 @@ export function ProjectWorkspace({
                               onChange={e => {
                                 const newP = [...personal];
                                 newP[idx].months = parseInt(e.target.value) || 0;
-                                setPersonal(newP);
-                                handleModify();
+                                updatePersonalAndBudget(newP);
                               }}
                             />
                           </td>
@@ -1977,8 +1977,7 @@ export function ProjectWorkspace({
                             <button
                               type="button"
                               onClick={() => {
-                                setPersonal(personal.filter(p => p.id !== worker.id));
-                                handleModify();
+                                updatePersonalAndBudget(personal.filter(p => p.id !== worker.id));
                               }}
                               className={styles.deleteIconBtn}
                             >
@@ -1996,7 +1995,7 @@ export function ProjectWorkspace({
                 <button
                   type="button"
                   onClick={() => {
-                    setPersonal([
+                    updatePersonalAndBudget([
                       ...personal,
                       {
                         id: `pers-${Date.now()}`,
@@ -3142,10 +3141,9 @@ export function ProjectWorkspace({
                       maxWeeklyHours: w.maxWeeklyHours || 37.5,
                       months: 12,
                     }));
-                    setPersonal(prev => [...prev, ...newEntries]);
+                    updatePersonalAndBudget([...personal, ...newEntries]);
                     setIsImportStaffModalOpen(false);
                     setSelectedStaffIds([]);
-                    handleModify();
                   }}
                   className={styles.saveBtn}
                   style={{ background: '#0D3A5F', color: 'white' }}
