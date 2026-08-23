@@ -49,6 +49,8 @@ import { GrantLifecycleNav, type LifecyclePhase } from '@/components/project/Gra
 import { TramitacionTab } from '@/components/project/tabs/TramitacionTab';
 import { IncidenciasTab } from '@/components/project/tabs/IncidenciasTab';
 import { AuditoriaTab } from '@/components/project/tabs/AuditoriaTab';
+import { FacturasManager } from '@/components/project/execution/FacturasManager';
+import { NominasManager } from '@/components/project/execution/NominasManager';
 import type { 
   GrantLifecycleStage, 
   ProjectVersion, 
@@ -1703,10 +1705,9 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.4 / 3.4 / 4.1: PERSONAL Y NÓMINAS */}
+      {/* 1.4 / 3.4: PERSONAL Y PLANTILLA */}
       {((activePhase === 'solicitud' && activeSubTab === 'personal') || 
-        (activePhase === 'reformulacion' && activeSubTab === 'reform_personal') || 
-        (activePhase === 'ejecucion' && activeSubTab === 'nominas')) && (
+        (activePhase === 'reformulacion' && activeSubTab === 'reform_personal')) && (
         <div className={styles.contentCard}>
           {activePhase === 'reformulacion' && (
             <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -2261,6 +2262,22 @@ export function ProjectWorkspace({
         </div>
       )}
 
+      {/* 4.1: NÓMINAS MENSUALES Y TIME-SHEETS (FASE 4) */}
+      {activePhase === 'ejecucion' && activeSubTab === 'nominas' && (
+        <div className={styles.contentCard}>
+          <NominasManager
+            nominas={nominasMensuales}
+            onChange={newNoms => {
+              setNominasMensuales(newNoms);
+              handleModify();
+            }}
+            assignedStaff={personal}
+            projectName={diagnostico.projectName || initialProject?.name || 'Proyecto'}
+            subvencionConcedida={subvencion.importeConcedido || 0}
+          />
+        </div>
+      )}
+
       {/* 1.5 / 3.5: PRESUPUESTO Y COFINANCIACIÓN */}
       {((activePhase === 'solicitud' && activeSubTab === 'presupuesto') || (activePhase === 'reformulacion' && activeSubTab === 'reform_presupuesto')) && (
         <div className={styles.contentCard}>
@@ -2471,249 +2488,15 @@ export function ProjectWorkspace({
       {/* 4.2: GASTOS Y FACTURAS (FASE 4) */}
       {activePhase === 'ejecucion' && activeSubTab === 'facturas' && (
         <div className={styles.contentCard}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <h2 className={styles.sectionTitle}><Receipt size={20} color="#2563eb" /> 6. Relación Clasificada de Gastos, Facturas y Justificantes</h2>
-              <p className={styles.sectionSubtitle}>Registra cada factura, su porcentaje de imputación a esta subvención y adjunta los comprobantes bancarios.</p>
-            </div>
-          </div>
-
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Proveedor / Emisor</th>
-                  <th>NIF / CIF</th>
-                  <th>Nº Factura</th>
-                  <th>Fecha</th>
-                  <th>Concepto</th>
-                  <th className={styles.numCol}>Total Factura</th>
-                  <th>% Imp.</th>
-                  <th className={styles.numCol}>Imputado Subvención</th>
-                  <th style={{ textAlign: 'center' }}>Adjunto Factura</th>
-                  <th style={{ textAlign: 'center' }}>Pago Bancario</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {gastosFacturas.map((fac, fIdx) => (
-                  <tr key={fac.id}>
-                    <td>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        value={fac.proveedor}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          newF[fIdx].proveedor = e.target.value;
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        style={{ width: '95px' }}
-                        value={fac.nif}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          newF[fIdx].nif = e.target.value;
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        style={{ width: '100px' }}
-                        value={fac.numFactura}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          newF[fIdx].numFactura = e.target.value;
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="date"
-                        className={styles.input}
-                        style={{ width: '125px' }}
-                        value={fac.fecha}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          newF[fIdx].fecha = e.target.value;
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        value={fac.concepto}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          newF[fIdx].concepto = e.target.value;
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className={styles.input}
-                        style={{ width: '90px', textAlign: 'right' }}
-                        value={fac.totalFactura}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          const total = parseFloat(e.target.value) || 0;
-                          newF[fIdx].totalFactura = total;
-                          newF[fIdx].importeImputado = Number((total * (newF[fIdx].pctImputado / 100)).toFixed(2));
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        className={styles.input}
-                        style={{ width: '65px', textAlign: 'right' }}
-                        value={fac.pctImputado}
-                        onChange={e => {
-                          const newF = [...gastosFacturas];
-                          const pct = parseFloat(e.target.value) || 0;
-                          newF[fIdx].pctImputado = pct;
-                          newF[fIdx].importeImputado = Number((newF[fIdx].totalFactura * (pct / 100)).toFixed(2));
-                          setGastosFacturas(newF);
-                          handleModify();
-                        }}
-                      />
-                    </td>
-                    <td className={styles.numCol} style={{ color: '#1e3a8a', fontWeight: 800 }}>
-                      {formatCurrency(fac.importeImputado)}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      {fac.facturaFileName ? (
-                        <a 
-                          href={fac.facturaFileUrl || '#'} 
-                          download={fac.facturaFileName}
-                          className={styles.fileAttachedBadge}
-                          title="Descargar Factura PDF"
-                        >
-                          <Paperclip size={11} /> {fac.facturaFileName.slice(0, 10)}...
-                        </a>
-                      ) : (
-                        <label className={styles.fileUploadLabel}>
-                          <Upload size={11} /> Factura
-                          <input 
-                            type="file" 
-                            style={{ display: 'none' }}
-                            onChange={(e) => handleFileUpload(e, (url, name) => {
-                              const newF = [...gastosFacturas];
-                              newF[fIdx].facturaFileUrl = url;
-                              newF[fIdx].facturaFileName = name;
-                              setGastosFacturas(newF);
-                            })}
-                          />
-                        </label>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <input
-                          type="checkbox"
-                          checked={fac.justificantePago}
-                          onChange={e => {
-                            const newF = [...gastosFacturas];
-                            newF[fIdx].justificantePago = e.target.checked;
-                            setGastosFacturas(newF);
-                            handleModify();
-                          }}
-                          style={{ width: '18px', height: '18px', accentColor: '#16a34a', cursor: 'pointer' }}
-                          title={fac.justificantePago ? 'Pago Verificado' : 'Pendiente de Justificante'}
-                        />
-                        {fac.justificanteFileName ? (
-                          <a 
-                            href={fac.justificanteFileUrl || '#'} 
-                            download={fac.justificanteFileName}
-                            className={styles.fileAttachedBadge}
-                            style={{ background: '#dcfce7', color: '#15803d', borderColor: '#86efac' }}
-                            title="Descargar Justificante de Pago"
-                          >
-                            <Paperclip size={10} /> OK
-                          </a>
-                        ) : (
-                          <label className={styles.fileUploadLabel} title="Subir justificante de pago bancario">
-                            <Upload size={10} /> Pago
-                            <input 
-                              type="file" 
-                              style={{ display: 'none' }}
-                              onChange={(e) => handleFileUpload(e, (url, name) => {
-                                const newF = [...gastosFacturas];
-                                newF[fIdx].justificanteFileUrl = url;
-                                newF[fIdx].justificanteFileName = name;
-                                newF[fIdx].justificantePago = true;
-                                setGastosFacturas(newF);
-                              })}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setGastosFacturas(gastosFacturas.filter(f => f.id !== fac.id));
-                          handleModify();
-                        }}
-                        className={styles.deleteIconBtn}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setGastosFacturas([
-                ...gastosFacturas,
-                {
-                  id: `fac-${Date.now()}`,
-                  proveedor: '',
-                  nif: '',
-                  numFactura: '',
-                  fecha: new Date().toISOString().split('T')[0],
-                  concepto: '',
-                  totalFactura: 0,
-                  pctImputado: 100,
-                  importeImputado: 0,
-                  partidaId: 'p-3',
-                  justificantePago: false,
-                }
-              ]);
+          <FacturasManager
+            facturas={gastosFacturas}
+            onChange={newFacs => {
+              setGastosFacturas(newFacs);
               handleModify();
             }}
-            className={styles.addSmallBtn}
-          >
-            <Plus size={16} /> Registrar Nueva Factura
-          </button>
+            partidasPresupuesto={presupuesto.partidas}
+            subvencionConcedida={subvencion.importeConcedido || 0}
+          />
         </div>
       )}
 

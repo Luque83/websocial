@@ -101,8 +101,12 @@ export interface ProjectWorkspaceData {
     totalFactura: number;
     pctImputado: number;
     importeImputado: number;
-    partidaId: string;
+    partidaId?: string;
+    partidaName?: string;
     justificantePago: boolean;
+    fechaPago?: string;
+    metodoPago?: string;
+    refBancaria?: string;
     facturaFileUrl?: string;
     facturaFileName?: string;
     justificanteFileUrl?: string;
