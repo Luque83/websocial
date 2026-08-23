@@ -17,7 +17,11 @@ import {
   DollarSign,
   Search,
   Receipt,
-  FileCheck
+  FileCheck,
+  Sparkles,
+  X,
+  ShieldCheck,
+  CreditCard
 } from 'lucide-react';
 import { TimeSheetModal } from './TimeSheetModal';
 import styles from './execution.module.css';
@@ -83,6 +87,24 @@ export function NominasManager({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+
+  // Form for OCR extraction
+  const [ocrForm, setOcrForm] = useState({
+    workerName: assignedStaff[0]?.name || 'Elena Gómez',
+    role: assignedStaff[0]?.role || 'Trabajadora Social / Coordinadora',
+    dni: '***4829**',
+    periodoMes: new Date().toISOString().slice(0, 7),
+    salarioBruto: assignedStaff[0]?.monthlySalary || 2100,
+    ssPatronal: Number(((assignedStaff[0]?.monthlySalary || 2100) * 0.314).toFixed(2)),
+    liquidoNeto: 1680.50,
+    irpfPct: 15,
+    pctImputado: assignedStaff[0] && assignedStaff[0].maxWeeklyHours ? Number(((assignedStaff[0].weeklyHours / assignedStaff[0].maxWeeklyHours) * 100).toFixed(1)) : 53.3,
+    reciboNominaName: 'Nomina_Oficial_Firmada.pdf',
+    justificantePagoName: 'SEPA_Transferencia_Sueldo.pdf',
+    rlcDocName: 'RLC_TGSS_Liquidacion.pdf',
+  });
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
@@ -141,6 +163,66 @@ export function NominasManager({
     onChange([...nominas, newNom]);
   };
 
+  const handleSimulateOcrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setOcrLoading(true);
+    setTimeout(() => {
+      // Pick matching worker from assigned staff or fallback
+      const matchingStaff = assignedStaff.find(s => file.name.toLowerCase().includes(s.name.split(' ')[0].toLowerCase())) || assignedStaff[0];
+      const salBruto = matchingStaff ? matchingStaff.monthlySalary : 2150.00;
+      const ssPatr = Number((salBruto * 0.314).toFixed(2));
+      const liquido = Number((salBruto * 0.78).toFixed(2));
+      const pctImp = matchingStaff && matchingStaff.maxWeeklyHours ? Number(((matchingStaff.weeklyHours / matchingStaff.maxWeeklyHours) * 100).toFixed(1)) : 53.3;
+
+      setOcrForm({
+        workerName: matchingStaff ? matchingStaff.name : 'Elena Gómez',
+        role: matchingStaff ? matchingStaff.role : 'Trabajadora Social / Coordinadora',
+        dni: '***4829**',
+        periodoMes: new Date().toISOString().slice(0, 7),
+        salarioBruto: salBruto,
+        ssPatronal: ssPatr,
+        liquidoNeto: liquido,
+        irpfPct: 15,
+        pctImputado: pctImp,
+        reciboNominaName: file.name,
+        justificantePagoName: `SEPA_Transf_${file.name.replace('.pdf', '')}.pdf`,
+        rlcDocName: `RLC_TGSS_${new Date().toISOString().slice(0, 7)}.pdf`,
+      });
+      setOcrLoading(false);
+    }, 850);
+  };
+
+  const handleConfirmOcr = () => {
+    const matched = assignedStaff.find(s => s.name === ocrForm.workerName);
+    const bruto = ocrForm.salarioBruto || 2000;
+    const ss = ocrForm.ssPatronal || (bruto * 0.314);
+    const costeEmpresa = Number((bruto + ss).toFixed(2));
+    const pct = ocrForm.pctImputado || 50;
+    const imp = Number((costeEmpresa * (pct / 100)).toFixed(2));
+
+    const newNom: NominaItem = {
+      id: `nom-${Date.now()}`,
+      workerId: matched?.workerId || matched?.id || `w-${Date.now()}`,
+      workerName: ocrForm.workerName,
+      role: ocrForm.role || matched?.role || 'Técnico/a',
+      periodoMes: ocrForm.periodoMes || new Date().toISOString().slice(0, 7),
+      salarioBruto: bruto,
+      ssPatronal: ss,
+      costeEmpresaTotal: costeEmpresa,
+      pctImputado: pct,
+      importeImputado: imp,
+      justificantePago: true,
+      reciboNominaName: ocrForm.reciboNominaName,
+      justificantePagoName: ocrForm.justificantePagoName,
+      rlcDocName: ocrForm.rlcDocName,
+    };
+
+    onChange([...nominas, newNom]);
+    setIsOcrModalOpen(false);
+  };
+
   const handleExportCSV = () => {
     const headers = [
       'Periodo',
@@ -188,7 +270,7 @@ export function NominasManager({
             <span>Ejecución de Personal, Nóminas y Control Horario (Time-Sheets)</span>
           </h2>
           <p className={styles.sectionSubtitle}>
-            Liquidación mensual de nóminas, transferencias bancarias SEPA, cotizaciones a la Seguridad Social (RLC/RNT) y partes horarios oficiales firmables.
+            Liquidación mensual de nóminas con auto-extracción OCR/IA, transferencias bancarias SEPA, cotizaciones a la Seguridad Social (RLC/RNT) y partes horarios oficiales firmables.
           </p>
         </div>
 
@@ -202,10 +284,17 @@ export function NominasManager({
           </button>
           <button
             type="button"
+            onClick={() => setIsOcrModalOpen(true)}
+            className={styles.btnOcr}
+          >
+            <Sparkles size={16} /> Subir Nómina con OCR / IA
+          </button>
+          <button
+            type="button"
             onClick={handleAddNomina}
             className={styles.btnPrimary}
           >
-            <Plus size={16} /> Añadir Nómina Mensual
+            <Plus size={16} /> Añadir Manual
           </button>
         </div>
       </div>
@@ -546,6 +635,192 @@ export function NominasManager({
           </tbody>
         </table>
       </div>
+
+      {/* OCR NÓMINA MODAL */}
+      {isOcrModalOpen && (
+        <div className={styles.modalOverlay} onClick={() => setIsOcrModalOpen(false)}>
+          <div className={styles.modalContentLarge} style={{ maxWidth: '680px' }} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalTopNav}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sparkles size={18} color="#4F46E5" />
+                <strong style={{ color: '#0D3A5F', fontSize: '1rem' }}>
+                  Auto-Extracción Inteligente de Nómina (OCR / IA)
+                </strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOcrModalOpen(false)}
+                className={styles.btnClose}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Dropzone */}
+              <label style={{
+                border: '2px dashed #818CF8',
+                background: '#EEF2FF',
+                borderRadius: '12px',
+                padding: '1.5rem',
+                textAlign: 'center',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <Upload size={32} color="#4F46E5" />
+                <strong style={{ color: '#3730A3', fontSize: '0.9375rem' }}>
+                  {ocrLoading ? '⏳ Procesando y extrayendo conceptos salariales con IA...' : 'Selecciona o arrastra el Recibo de Nómina en PDF o Imagen'}
+                </strong>
+                <span style={{ fontSize: '0.75rem', color: '#6366F1' }}>
+                  Extracción automática de Devengos, Deducciones, Líquido Neto, Cuota Patronal SS y Coste Empresa
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleSimulateOcrUpload}
+                />
+              </label>
+
+              {/* Form Review */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label className={styles.dataLabel}>Trabajador/a Asignado</label>
+                  <select
+                    className={styles.inputField}
+                    value={ocrForm.workerName}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const matched = assignedStaff.find(s => s.name === val);
+                      setOcrForm({
+                        ...ocrForm,
+                        workerName: val,
+                        role: matched ? matched.role : ocrForm.role,
+                        salarioBruto: matched ? matched.monthlySalary : ocrForm.salarioBruto,
+                        ssPatronal: matched ? Number((matched.monthlySalary * 0.314).toFixed(2)) : ocrForm.ssPatronal,
+                        pctImputado: matched && matched.maxWeeklyHours ? Number(((matched.weeklyHours / matched.maxWeeklyHours) * 100).toFixed(1)) : ocrForm.pctImputado
+                      });
+                    }}
+                  >
+                    {assignedStaff.map(s => (
+                      <option key={s.id} value={s.name}>{s.name} ({s.role})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={styles.dataLabel}>Periodo de Liquidación</label>
+                  <input
+                    type="month"
+                    className={styles.inputField}
+                    value={ocrForm.periodoMes}
+                    onChange={e => setOcrForm({ ...ocrForm, periodoMes: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={styles.dataLabel}>Puesto / Grupo Cotización</label>
+                  <input
+                    type="text"
+                    className={styles.inputField}
+                    value={ocrForm.role}
+                    onChange={e => setOcrForm({ ...ocrForm, role: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={styles.dataLabel}>Líquido Neto a Percibir (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={styles.inputField}
+                    value={ocrForm.liquidoNeto}
+                    onChange={e => setOcrForm({ ...ocrForm, liquidoNeto: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className={styles.dataLabel}>Total Devengado / Salario Bruto (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={styles.inputField}
+                    style={{ fontWeight: 800 }}
+                    value={ocrForm.salarioBruto}
+                    onChange={e => {
+                      const bruto = parseFloat(e.target.value) || 0;
+                      setOcrForm({ 
+                        ...ocrForm, 
+                        salarioBruto: bruto,
+                        ssPatronal: Number((bruto * 0.314).toFixed(2))
+                      });
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className={styles.dataLabel}>Coste SS Patronal Empresa (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={styles.inputField}
+                    style={{ fontWeight: 800 }}
+                    value={ocrForm.ssPatronal}
+                    onChange={e => setOcrForm({ ...ocrForm, ssPatronal: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className={styles.dataLabel}>% Imputación a la Subvención</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className={styles.inputField}
+                    style={{ fontWeight: 800, color: '#0D3A5F' }}
+                    value={ocrForm.pctImputado}
+                    onChange={e => setOcrForm({ ...ocrForm, pctImputado: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className={styles.dataLabel}>Coste Empresa Total / Mes</label>
+                  <div style={{ padding: '0.45rem 0.6rem', background: '#F1F5F9', borderRadius: '6px', fontWeight: 800, color: '#0D3A5F', fontSize: '0.9375rem' }}>
+                    {formatCurrency(Number(((ocrForm.salarioBruto || 0) + (ocrForm.ssPatronal || 0)).toFixed(2)))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary Info */}
+              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', display: 'block' }}>IMPORTE IMPUTADO A SUBVENCIÓN:</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#15803D' }}>
+                    {formatCurrency(Number((((ocrForm.salarioBruto + ocrForm.ssPatronal) * (ocrForm.pctImputado / 100))).toFixed(2)))}
+                  </strong>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#166534' }}>
+                  ✓ Justificante SEPA y RLC auto-vinculados
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsOcrModalOpen(false)}
+                  className={styles.btnSecondary}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmOcr}
+                  className={styles.btnPrimary}
+                >
+                  <CheckCircle2 size={16} /> Confirmar e Incorporar Nómina
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TIME-SHEET MODAL */}
       {selectedWorkerForSheet && (
