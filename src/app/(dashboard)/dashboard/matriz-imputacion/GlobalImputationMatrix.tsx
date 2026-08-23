@@ -24,7 +24,12 @@ import {
   ChevronRight,
   Sparkles,
   Info,
-  DollarSign
+  DollarSign,
+  PieChart,
+  Plus,
+  Trash2,
+  SlidersHorizontal,
+  Layers
 } from 'lucide-react';
 import Link from 'next/link';
 import type { Worker, ProjectAllocation } from '@/config/staff';
@@ -48,7 +53,27 @@ interface GlobalImputationMatrixProps {
   };
 }
 
-type ViewMode = 'matrix360' | 'diff' | 'monthly' | 'auditor';
+export type ViewMode = 'visual_bars' | 'interactive_editor' | 'matrix360' | 'auditor';
+
+// Paleta de colores consistente y accesible para los proyectos
+export const PROJECT_COLORS = [
+  { bg: '#2563EB', light: '#EFF6FF', border: '#93C5FD', text: '#FFFFFF', name: 'Azul Real' },
+  { bg: '#0D9488', light: '#F0FDFA', border: '#5EEAD4', text: '#FFFFFF', name: 'Verde Turquesa' },
+  { bg: '#7C3AED', light: '#F5F3FF', border: '#C4B5FD', text: '#FFFFFF', name: 'Púrpura Violeta' },
+  { bg: '#D97706', light: '#FFFBEB', border: '#FCD34D', text: '#FFFFFF', name: 'Ámbar Cálido' },
+  { bg: '#DB2777', light: '#FDF2F8', border: '#F472B6', text: '#FFFFFF', name: 'Rosa Magenta' },
+  { bg: '#0891B2', light: '#ECFEFF', border: '#67E8F9', text: '#FFFFFF', name: 'Cian Océano' },
+  { bg: '#EA580C', light: '#FFF7ED', border: '#FDBA74', text: '#FFFFFF', name: 'Naranja Vivo' },
+  { bg: '#4F46E5', light: '#EEF2FF', border: '#A5B4FC', text: '#FFFFFF', name: 'Índigo' },
+  { bg: '#64748B', light: '#F8FAFC', border: '#CBD5E1', text: '#FFFFFF', name: 'Sede / Estructura' },
+];
+
+export function getProjectTheme(projectId?: string, projectIndex: number = 0) {
+  if (!projectId || projectId === 'sede' || projectId.toLowerCase().includes('sede')) {
+    return { bg: '#64748B', light: '#F8FAFC', border: '#CBD5E1', text: '#FFFFFF', name: 'Sede / Estructura' };
+  }
+  return PROJECT_COLORS[Math.abs(projectIndex) % (PROJECT_COLORS.length - 1)];
+}
 
 export function GlobalImputationMatrix({
   initialWorkers,
@@ -56,9 +81,9 @@ export function GlobalImputationMatrix({
   initialLifecycleMap = {},
   initialStats,
 }: GlobalImputationMatrixProps) {
-  const [activeMode, setActiveMode] = useState<ViewMode>('matrix360');
+  const [activeMode, setActiveMode] = useState<ViewMode>('visual_bars');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'alert' | 'ok'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'alert' | 'ok' | 'free'>('all');
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
 
   // Workers state with allocations
@@ -104,7 +129,9 @@ export function GlobalImputationMatrix({
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
   };
 
-  const handleHourChange = (workerIdx: number, projectTargetId: string, hours: number) => {
+  // Handler for direct hours change
+  const handleHourChange = (workerIdx: number, projectTargetId: string | undefined, hours: number) => {
+    if (!projectTargetId) return;
     const updated = [...workers];
     const targetWorker = updated[workerIdx];
     const allocIdx = targetWorker.allocations.findIndex(a => a.projectId === projectTargetId);
@@ -124,18 +151,21 @@ export function GlobalImputationMatrix({
     setWorkers(updated);
   };
 
+  // Handler for percentage change
+  const handlePctChange = (workerIdx: number, projectTargetId: string | undefined, pct: number) => {
+    if (!projectTargetId) return;
+    const targetWorker = workers[workerIdx];
+    const maxH = targetWorker.maxWeeklyHours || 37.5;
+    const computedHours = Number(((pct / 100) * maxH).toFixed(2));
+    handleHourChange(workerIdx, projectTargetId, computedHours);
+  };
+
   const handleSaveAndSync = async () => {
     setIsSaving(true);
     try {
       const res = await savePersonalMatrixAction({ workers }, undefined, true);
       if (res.success) {
         showToast('¡Matriz sincronizada con éxito con los presupuestos y expedientes de todos los proyectos!');
-        try {
-          // Re-fetch or refresh
-          if (typeof window !== 'undefined') {
-            // trigger soft refresh
-          }
-        } catch {}
       } else {
         alert(res.error || 'Error al guardar la matriz.');
       }
@@ -159,6 +189,11 @@ export function GlobalImputationMatrix({
     return sum > (w.maxWeeklyHours || 37.5);
   });
 
+  const workersWithFreeCapacity = workers.filter(w => {
+    const sum = (w.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
+    return sum < (w.maxWeeklyHours || 37.5);
+  });
+
   // Export CSV
   const handleExportCSV = () => {
     const headers = [
@@ -166,33 +201,34 @@ export function GlobalImputationMatrix({
       'Rol / Categoria',
       'Salario Bruto Mes',
       'Jornada Max (h/sem)',
-      ...projects.map(p => `Horas Solicitadas (${p.name})`),
-      ...projects.map(p => `Horas Reformuladas (${p.name})`),
+      ...projects.map(p => `% Imputado (${p.name})`),
+      ...projects.map(p => `Horas Imputadas (${p.name})`),
       'Sede / Estructura (h/sem)',
       'Total Horas Asignadas',
-      'Porcentaje Jornada Imputada',
+      'Porcentaje Total Imputado',
       'Estado Cumplimiento'
     ];
 
     const rows = workers.map(w => {
       const totalHours = (w.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
-      const pct = (w.maxWeeklyHours || 37.5) > 0 ? ((totalHours / (w.maxWeeklyHours || 37.5)) * 100).toFixed(1) : '0';
+      const maxH = w.maxWeeklyHours || 37.5;
+      const pct = maxH > 0 ? ((totalHours / maxH) * 100).toFixed(1) : '0';
       const sedeHours = w.allocations.find(a => a.projectId === 'sede')?.weeklyHours || 0;
 
       return [
         `"${w.name}"`,
         `"${w.role}"`,
         w.salaryMonthly,
-        w.maxWeeklyHours || 37.5,
+        maxH,
         ...projects.map(p => {
-          const key = `${w.id}_${p.id}`;
-          return initialLifecycleMap[key]?.solicitadoHours || w.allocations.find(a => a.projectId === p.id)?.weeklyHours || 0;
+          const h = w.allocations.find(a => a.projectId === p.id)?.weeklyHours || 0;
+          return `"${maxH > 0 ? ((h / maxH) * 100).toFixed(1) : 0}%"`;
         }),
         ...projects.map(p => w.allocations.find(a => a.projectId === p.id)?.weeklyHours || 0),
         sedeHours,
         totalHours,
         `"${pct}%"`,
-        totalHours > (w.maxWeeklyHours || 37.5) ? '"SOBREIMPUTACION"' : '"CONFORME"'
+        totalHours > maxH ? '"SOBREIMPUTACION"' : '"CONFORME"'
       ];
     });
 
@@ -200,7 +236,7 @@ export function GlobalImputationMatrix({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Matriz_Imputacion_Multiproyecto_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Matriz_Imputacion_Porcentajes_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -211,14 +247,23 @@ export function GlobalImputationMatrix({
     const matchesSearch = w.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           w.role.toLowerCase().includes(searchQuery.toLowerCase());
     const totalHours = (w.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
-    const isOver = totalHours > (w.maxWeeklyHours || 37.5);
+    const maxH = w.maxWeeklyHours || 37.5;
+    const isOver = totalHours > maxH;
+    const hasFree = totalHours < maxH;
 
     if (statusFilter === 'alert') return matchesSearch && isOver;
-    if (statusFilter === 'ok') return matchesSearch && !isOver;
+    if (statusFilter === 'ok') return matchesSearch && !isOver && !hasFree;
+    if (statusFilter === 'free') return matchesSearch && hasFree;
     return matchesSearch;
   });
 
   const selectedWorker = workers.find(w => w.id === selectedWorkerId);
+
+  // List of all active projects including Sede
+  const allProjectItems = [
+    ...projects,
+    { id: 'sede', name: 'Sede / Estructura General', phase: 'Estructura', grantAmount: 0 }
+  ];
 
   return (
     <div className={styles.container}>
@@ -249,9 +294,9 @@ export function GlobalImputationMatrix({
       {/* Header */}
       <div className={styles.header}>
         <div>
-          <h1 className={styles.title}>Matriz de Imputación de Personal y Ciclo de Vida</h1>
+          <h1 className={styles.title}>Matriz de Imputación de Personal y Planificación</h1>
           <p className={styles.subtitle}>
-            Control centralizado y trazabilidad de dedicación horaria entre proyectos a lo largo de las 4 fases: Solicitud (V1), Reformulación (V2), Ejecución Real (Nóminas + SEPA) y Justificación.
+            Mapa visual de dedicación horaria y porcentaje de jornada asignada a cada subvención con control de sobreimputación y costes en tiempo real.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -291,17 +336,17 @@ export function GlobalImputationMatrix({
           </div>
           <div>
             <div className={styles.statVal}>{formatCurrency(initialStats?.totalConcedidoCost || 0)}</div>
-            <div className={styles.statLabel}>Masa Salarial Concedida (V2)</div>
+            <div className={styles.statLabel}>Masa Salarial Imputada (V2)</div>
           </div>
         </div>
 
         <div className={styles.statCard}>
           <div className={styles.statIcon} style={{ background: '#F0FDF4', color: '#16A34A' }}>
-            <Receipt size={24} />
+            <PieChart size={24} />
           </div>
           <div>
-            <div className={styles.statVal}>{formatCurrency(initialStats?.totalEjecutadoPaidCost || 0)}</div>
-            <div className={styles.statLabel}>Nóminas Pagadas SEPA ({initialStats?.payrollSepaCompliancePct || 100}%)</div>
+            <div className={styles.statVal}>{allProjectItems.length} <span style={{ fontSize: '0.875rem', color: '#5C7E9B', fontWeight: 600 }}>Proyectos</span></div>
+            <div className={styles.statLabel}>Centros de Coste Activos</div>
           </div>
         </div>
 
@@ -318,151 +363,643 @@ export function GlobalImputationMatrix({
         </div>
       </div>
 
-      {/* Mode Switcher (Lifecycle Lens) */}
+      {/* Main Mode Navigation Bar */}
       <nav className={styles.modeNav}>
+        <button
+          type="button"
+          onClick={() => setActiveMode('visual_bars')}
+          className={`${styles.modeBtn} ${activeMode === 'visual_bars' ? styles.modeBtnActive : ''}`}
+        >
+          <Layers size={17} color="#2563EB" />
+          <span>1. 🎨 Mapa Visual de Imputación (Barras por Proyecto)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMode('interactive_editor')}
+          className={`${styles.modeBtn} ${activeMode === 'interactive_editor' ? styles.modeBtnActive : ''}`}
+        >
+          <SlidersHorizontal size={17} color="#10B981" />
+          <span>2. ⚡ Asignador de Porcentajes por Trabajador</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveMode('matrix360')}
           className={`${styles.modeBtn} ${activeMode === 'matrix360' ? styles.modeBtnActive : ''}`}
         >
-          <Sparkles size={16} color="#7C3AED" />
-          <span>1. Matriz 360° (Ciclo de Vida por Fases)</span>
+          <FileSpreadsheet size={17} color="#7C3AED" />
+          <span>3. 📋 Matriz Cuadriculada (Fases 1-4 & Nóminas)</span>
         </button>
-        <button
-          type="button"
-          onClick={() => setActiveMode('diff')}
-          className={`${styles.modeBtn} ${activeMode === 'diff' ? styles.modeBtnActive : ''}`}
-        >
-          <Sliders size={16} color="#2563EB" />
-          <span>2. Comparativa Diff (Solicitado vs. Concedido vs. Real)</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveMode('monthly')}
-          className={`${styles.modeBtn} ${activeMode === 'monthly' ? styles.modeBtnActive : ''}`}
-        >
-          <Calendar size={16} color="#0D9488" />
-          <span>3. Malla Mensual de Nóminas & Justificantes SEPA (12 Meses)</span>
-        </button>
+
         <button
           type="button"
           onClick={() => setActiveMode('auditor')}
           className={`${styles.modeBtn} ${activeMode === 'auditor' ? styles.modeBtnActive : ''}`}
         >
-          <ShieldCheck size={16} color="#EA580C" />
-          <span>4. Auditor Antifraude de Doble Financiación</span>
-          {overAllocatedWorkers.length > 0 && (
-            <span style={{ background: '#FEE2E2', color: '#DC2626', fontSize: '0.6875rem', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 800 }}>
-              ⚠️ {overAllocatedWorkers.length}
-            </span>
-          )}
+          <ShieldCheck size={17} color={overAllocatedWorkers.length > 0 ? '#DC2626' : '#16A34A'} />
+          <span>4. 🛡️ Auditor Antifraude de Jornada</span>
         </button>
       </nav>
 
-      {/* Matrix Card */}
-      <div className={styles.matrixCard}>
-        {/* Toolbar */}
-        <div className={styles.toolbar}>
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              placeholder="🔍 Buscar trabajador o rol..."
-              className={styles.searchInput}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-            <select
-              className={styles.filterSelect}
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as any)}
-            >
-              <option value="all">Todos los trabajadores ({workers.length})</option>
-              <option value="alert">⚠️ Con Alerta / Sobreimputación ({overAllocatedWorkers.length})</option>
-              <option value="ok">🟢 Conforme (≤ 100% jornada)</option>
-            </select>
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* PESTAÑA 1: MAPA VISUAL DE IMPUTACIÓN (STACKED BARS CON COLORES)          */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'visual_bars' && (
+        <div className={styles.visualCard}>
+          {/* Project Color Palette Legend */}
+          <div className={styles.legendContainer}>
+            <div className={styles.legendHeader}>
+              <span className={styles.legendTitle}>
+                <PieChart size={16} /> Paleta de Colores de Proyectos & Asignación Global
+              </span>
+              <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                Cada proyecto tiene un color asignado único para identificar la dedicación de toda la plantilla
+              </span>
+            </div>
+
+            <div className={styles.legendGrid}>
+              {allProjectItems.map((p, pIdx) => {
+                const theme = getProjectTheme(p.id, pIdx);
+                const totalHoursInProj = workers.reduce((s, w) => {
+                  const alloc = w.allocations.find(a => a.projectId === p.id);
+                  return s + (alloc?.weeklyHours || 0);
+                }, 0);
+                const totalWorkersInProj = workers.filter(w => {
+                  const alloc = w.allocations.find(a => a.projectId === p.id);
+                  return alloc && alloc.weeklyHours > 0;
+                }).length;
+
+                return (
+                  <div 
+                    key={p.id} 
+                    className={styles.legendBadge}
+                    style={{ 
+                      background: theme.light, 
+                      borderColor: theme.border,
+                      color: '#0D3A5F'
+                    }}
+                    title={`${p.name}: ${totalHoursInProj.toFixed(1)} h/sem totales asignadas entre ${totalWorkersInProj} trabajador/es`}
+                  >
+                    <span className={styles.legendColorDot} style={{ background: theme.bg }} />
+                    <strong>{p.name.length > 28 ? `${p.name.slice(0, 26)}...` : p.name}</strong>
+                    <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600 }}>
+                      ({totalHoursInProj.toFixed(1)}h · {totalWorkersInProj} trab.)
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <div style={{ fontSize: '0.8125rem', color: '#5C7E9B', fontWeight: 600 }}>
-            Mostrando <strong>{filteredWorkers.length}</strong> de {workers.length} trabajadores
+          {/* Filters and search bar */}
+          <div className={styles.filterBar}>
+            <div className={styles.filterGroup}>
+              <input
+                type="text"
+                placeholder="🔍 Buscar trabajador o categoría..."
+                className={styles.searchInput}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <select
+                className={styles.selectFilter}
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as any)}
+              >
+                <option value="all">Toda la Plantilla ({workers.length})</option>
+                <option value="ok">🟢 100% Imputados Completos</option>
+                <option value="free">🔵 Con Horas Libres / Disponibles ({workersWithFreeCapacity.length})</option>
+                <option value="alert">🔴 Sobreimputados ({overAllocatedWorkers.length})</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setActiveMode('interactive_editor')}
+                className={styles.btnPrimary}
+                style={{ fontSize: '0.8125rem', padding: '0.45rem 0.9rem' }}
+              >
+                <SlidersHorizontal size={14} /> Asignar Porcentajes Rápido
+              </button>
+            </div>
+          </div>
+
+          {/* List of Workers with Giant Multi-Color Stacked Bar */}
+          <div className={styles.visualWorkersList}>
+            {filteredWorkers.map((worker, wIdx) => {
+              const maxH = worker.maxWeeklyHours || 37.5;
+              const totalAllocHours = (worker.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
+              const totalPct = maxH > 0 ? (totalAllocHours / maxH) * 100 : 0;
+              const freeHours = Math.max(0, maxH - totalAllocHours);
+              const freePct = maxH > 0 ? (freeHours / maxH) * 100 : 0;
+              const overHours = Math.max(0, totalAllocHours - maxH);
+              const isOver = totalAllocHours > maxH;
+
+              const salMes = worker.pagas === 14 ? (worker.salaryMonthly * 14) / 12 : worker.salaryMonthly;
+              const ssMes = (salMes * (worker.ssPct || 31.4)) / 100;
+              const costeEmpresaMes = salMes + ssMes;
+
+              // Filter allocations that have > 0 hours
+              const activeAllocations = (worker.allocations || []).filter(a => (a.weeklyHours || 0) > 0);
+
+              return (
+                <div key={worker.id} className={styles.workerVisualRow}>
+                  {/* Row Header */}
+                  <div className={styles.workerVisualHeader}>
+                    <div className={styles.workerInfoLeft}>
+                      <div className={styles.workerAvatar}>
+                        {worker.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                      </div>
+                      <div>
+                        <h3 className={styles.workerMetaName}>{worker.name}</h3>
+                        <div className={styles.workerMetaSub}>
+                          <span>{worker.role}</span>
+                          <span>·</span>
+                          <span style={{ color: '#0D3A5F', fontWeight: 700 }}>Bruto: {formatCurrency(worker.salaryMonthly)}/mes</span>
+                          <span>·</span>
+                          <span>Coste Empresa: <strong>{formatCurrency(costeEmpresaMes)}/mes</strong></span>
+                          <span>·</span>
+                          <span>Jornada: <strong>{maxH}h/sem</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={styles.workerStatusBadgeRight}>
+                      {isOver ? (
+                        <span className={styles.badgeDanger} style={{ fontSize: '0.8125rem' }}>
+                          <AlertTriangle size={14} /> {totalPct.toFixed(1)}% Imputado (+{overHours.toFixed(1)}h Exceso)
+                        </span>
+                      ) : totalPct >= 99.5 ? (
+                        <span className={styles.badgeOk} style={{ fontSize: '0.8125rem' }}>
+                          <CheckCircle2 size={14} /> 100% Jornada Completa ({totalAllocHours.toFixed(1)}h)
+                        </span>
+                      ) : (
+                        <span className={styles.badgeWarn} style={{ background: '#EFF6FF', color: '#1E40AF', borderColor: '#BFDBFE', fontSize: '0.8125rem' }}>
+                          <Info size={14} /> {totalPct.toFixed(0)}% Asignado · {freePct.toFixed(0)}% Libre ({freeHours.toFixed(1)}h)
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedWorkerId(worker.id);
+                          setActiveMode('interactive_editor');
+                        }}
+                        className={styles.btnSecondary}
+                        style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+                      >
+                        <Sliders size={13} /> Ajustar %
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* The Giant Multi-Color Stacked Bar */}
+                  <div className={styles.stackedBarTrack} title={`Total imputado: ${totalPct.toFixed(1)}% (${totalAllocHours.toFixed(1)}h de ${maxH}h)`}>
+                    {activeAllocations.map((alloc) => {
+                      const pIdx = allProjectItems.findIndex(p => p.id === alloc.projectId);
+                      const theme = getProjectTheme(alloc.projectId, pIdx >= 0 ? pIdx : 0);
+                      const allocPct = maxH > 0 ? (alloc.weeklyHours / maxH) * 100 : 0;
+                      const segmentCost = costeEmpresaMes * (allocPct / 100);
+
+                      return (
+                        <div
+                          key={alloc.id || alloc.projectId}
+                          className={styles.stackedSegment}
+                          style={{
+                            width: `${Math.min(100, allocPct)}%`,
+                            background: theme.bg,
+                          }}
+                          onClick={() => setSelectedWorkerId(worker.id)}
+                          title={`${alloc.projectName}: ${alloc.weeklyHours}h/sem (${allocPct.toFixed(1)}% de jornada) · ${formatCurrency(segmentCost)}/mes`}
+                        >
+                          {allocPct >= 12 ? (
+                            <span>{alloc.projectName.slice(0, 16)} · {allocPct.toFixed(0)}% ({alloc.weeklyHours}h)</span>
+                          ) : allocPct >= 6 ? (
+                            <span>{allocPct.toFixed(0)}%</span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+
+                    {/* Available free capacity segment */}
+                    {freePct > 0 && !isOver && (
+                      <div 
+                        className={styles.stackedSegmentAvailable}
+                        style={{ width: `${freePct}%` }}
+                        title={`Capacidad disponible: ${freeHours.toFixed(1)}h/sem (${freePct.toFixed(1)}% de jornada libre)`}
+                      >
+                        {freePct >= 15 && `⚪ ${freePct.toFixed(0)}% Libre (${freeHours.toFixed(1)}h)`}
+                      </div>
+                    )}
+
+                    {/* Over-allocation warning segment */}
+                    {isOver && (
+                      <div 
+                        className={styles.stackedSegmentOver}
+                        style={{ width: `${Math.min(40, ((overHours / maxH) * 100))}%` }}
+                        title={`¡ALERTA DE DOBLE FINANCIACIÓN! Exceso de ${overHours.toFixed(1)}h/sem (${((overHours / maxH) * 100).toFixed(0)}%)`}
+                      >
+                        ⚠️ +{((overHours / maxH) * 100).toFixed(0)}% SOBREIMPUTADO
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Allocation badges list below the bar */}
+                  <div className={styles.allocTagsRow}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B' }}>Reparto:</span>
+                    {activeAllocations.length === 0 ? (
+                      <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontStyle: 'italic' }}>Sin proyectos asignados (100% disponible)</span>
+                    ) : (
+                      activeAllocations.map(alloc => {
+                        const pIdx = allProjectItems.findIndex(p => p.id === alloc.projectId);
+                        const theme = getProjectTheme(alloc.projectId, pIdx >= 0 ? pIdx : 0);
+                        const allocPct = maxH > 0 ? (alloc.weeklyHours / maxH) * 100 : 0;
+                        const segmentCost = costeEmpresaMes * (allocPct / 100);
+
+                        return (
+                          <div 
+                            key={alloc.projectId}
+                            className={styles.allocTagItem}
+                            style={{ borderColor: theme.border }}
+                          >
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: theme.bg }} />
+                            <span>{alloc.projectName}</span>
+                            <strong style={{ color: theme.bg }}>{allocPct.toFixed(1)}%</strong>
+                            <span style={{ color: '#64748B' }}>({alloc.weeklyHours}h · {formatCurrency(segmentCost)}/mes)</span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {/* MODE 1: MATRIZ 360° (CICLO DE VIDA) */}
-        {activeMode === 'matrix360' && (
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* PESTAÑA 2: ASIGNADOR DE PORCENTAJES POR TRABAJADOR (EDICIÓN INTERACTIVA)  */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'interactive_editor' && (
+        <div className={styles.visualCard}>
+          <div style={{ background: '#F0FDFA', border: '1.5px solid #5EEAD4', borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <SlidersHorizontal size={22} color="#0D9488" />
+              <div>
+                <strong style={{ color: '#134E4A', fontSize: '0.9375rem' }}>⚡ Asignador Visual de Porcentajes de Imputación</strong>
+                <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.75rem', color: '#115E59' }}>
+                  Ajusta los sliders o pulsa en los botones rápidos (+25%, +50%, etc.) para repartir la jornada entre proyectos. La barra y los costes se recalculan en tiempo real.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveAndSync}
+              disabled={isSaving}
+              className={styles.btnPrimary}
+            >
+              <Save size={16} /> {isSaving ? 'Guardando...' : '💾 Guardar y Sincronizar'}
+            </button>
+          </div>
+
+          {/* Cards Grid */}
+          <div className={styles.editorCardsGrid}>
+            {filteredWorkers.map((worker) => {
+              const realWorkerIdx = workers.findIndex(w => w.id === worker.id);
+              const maxH = worker.maxWeeklyHours || 37.5;
+              const totalAllocHours = (worker.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
+              const totalPct = maxH > 0 ? (totalAllocHours / maxH) * 100 : 0;
+              const freeHours = Math.max(0, maxH - totalAllocHours);
+              const freePct = maxH > 0 ? (freeHours / maxH) * 100 : 0;
+              const overHours = Math.max(0, totalAllocHours - maxH);
+              const isOver = totalAllocHours > maxH;
+
+              const salMes = worker.pagas === 14 ? (worker.salaryMonthly * 14) / 12 : worker.salaryMonthly;
+              const ssMes = (salMes * (worker.ssPct || 31.4)) / 100;
+              const costeEmpresaMes = salMes + ssMes;
+
+              // Proyectos ya con horas asignadas
+              const assignedAllocations = (worker.allocations || []).filter(a => a.weeklyHours > 0);
+              // Proyectos que están en 0 o no asignados para el dropdown
+              const unassignedProjects = allProjectItems.filter(p => {
+                const existing = worker.allocations.find(a => a.projectId === p.id);
+                return !existing || existing.weeklyHours === 0;
+              });
+
+              return (
+                <div key={worker.id} className={styles.workerEditorCard}>
+                  {/* Card Header */}
+                  <div className={styles.workerEditorHeader}>
+                    <div className={styles.workerEditorHeaderTitle}>
+                      <div className={styles.workerAvatar}>
+                        {worker.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>{worker.name}</h3>
+                        <div style={{ fontSize: '0.8125rem', color: '#64748B', display: 'flex', gap: '0.5rem', marginTop: '0.2rem' }}>
+                          <span>{worker.role}</span>
+                          <span>·</span>
+                          <span>Jornada Base: <strong>{maxH}h/sem</strong></span>
+                          <span>·</span>
+                          <span>Coste Empresa: <strong>{formatCurrency(costeEmpresaMes)}/mes</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      {isOver ? (
+                        <span className={styles.badgeDanger}>
+                          <AlertTriangle size={15} /> ¡Sobreimputado! {totalPct.toFixed(1)}% (+{overHours.toFixed(1)}h)
+                        </span>
+                      ) : totalPct >= 99.5 ? (
+                        <span className={styles.badgeOk}>
+                          <CheckCircle2 size={15} /> 100% Imputado ({totalAllocHours.toFixed(1)}h)
+                        </span>
+                      ) : (
+                        <span className={styles.badgeWarn} style={{ background: '#EFF6FF', color: '#1E40AF', borderColor: '#BFDBFE' }}>
+                          <Info size={15} /> {totalPct.toFixed(0)}% Asignado · {freePct.toFixed(0)}% Libre ({freeHours.toFixed(1)}h)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Real-time Live Stacked Bar */}
+                  <div className={styles.stackedBarTrack}>
+                    {assignedAllocations.map((alloc) => {
+                      const pIdx = allProjectItems.findIndex(p => p.id === alloc.projectId);
+                      const theme = getProjectTheme(alloc.projectId, pIdx >= 0 ? pIdx : 0);
+                      const allocPct = maxH > 0 ? (alloc.weeklyHours / maxH) * 100 : 0;
+
+                      return (
+                        <div
+                          key={alloc.projectId}
+                          className={styles.stackedSegment}
+                          style={{
+                            width: `${Math.min(100, allocPct)}%`,
+                            background: theme.bg,
+                          }}
+                        >
+                          {allocPct >= 10 && `${alloc.projectName.slice(0, 14)} · ${allocPct.toFixed(0)}% (${alloc.weeklyHours}h)`}
+                        </div>
+                      );
+                    })}
+
+                    {freePct > 0 && !isOver && (
+                      <div className={styles.stackedSegmentAvailable} style={{ width: `${freePct}%` }}>
+                        {freePct >= 15 && `⚪ ${freePct.toFixed(0)}% Libre (${freeHours.toFixed(1)}h)`}
+                      </div>
+                    )}
+
+                    {isOver && (
+                      <div className={styles.stackedSegmentOver} style={{ width: `${Math.min(40, ((overHours / maxH) * 100))}%` }}>
+                        ⚠️ +{((overHours / maxH) * 100).toFixed(0)}% SOBRECARGA
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Allocation Rows */}
+                  <div className={styles.allocationRowsContainer}>
+                    {assignedAllocations.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '1.5rem', background: '#F8FAFC', borderRadius: '10px', color: '#64748B', fontSize: '0.875rem' }}>
+                        Este trabajador no tiene ningún proyecto asignado actualmente. Selecciona un proyecto abajo para empezar.
+                      </div>
+                    ) : (
+                      assignedAllocations.map(alloc => {
+                        const pIdx = allProjectItems.findIndex(p => p.id === alloc.projectId);
+                        const theme = getProjectTheme(alloc.projectId, pIdx >= 0 ? pIdx : 0);
+                        const allocPct = maxH > 0 ? (alloc.weeklyHours / maxH) * 100 : 0;
+                        const costMonth = costeEmpresaMes * (allocPct / 100);
+                        const costYear = costMonth * (alloc.months || 12);
+
+                        return (
+                          <div key={alloc.projectId} className={styles.allocationRowCard}>
+                            {/* Project Identification */}
+                            <div className={styles.projectInfoBlock}>
+                              <div className={styles.projectColorSquare} style={{ background: theme.bg }} />
+                              <div>
+                                <div className={styles.projectNameText}>{alloc.projectName}</div>
+                                <div className={styles.projectPhaseSub}>{alloc.projectId === 'sede' ? 'Estructura' : 'Subvención Concedida'}</div>
+                              </div>
+                            </div>
+
+                            {/* Slider & Quick Buttons */}
+                            <div className={styles.sliderControlBlock}>
+                              <div className={styles.sliderRow}>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  step="2.5"
+                                  className={styles.customRangeInput}
+                                  value={allocPct}
+                                  onChange={e => handlePctChange(realWorkerIdx, alloc.projectId, parseFloat(e.target.value) || 0)}
+                                />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    className={styles.inputNumber}
+                                    style={{ width: '65px', fontWeight: 800, color: theme.bg }}
+                                    value={Number(allocPct.toFixed(1))}
+                                    onChange={e => handlePctChange(realWorkerIdx, alloc.projectId, parseFloat(e.target.value) || 0)}
+                                  />
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B' }}>%</span>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={maxH}
+                                    step="0.5"
+                                    className={styles.inputNumber}
+                                    style={{ width: '70px' }}
+                                    value={alloc.weeklyHours}
+                                    onChange={e => handleHourChange(realWorkerIdx, alloc.projectId, parseFloat(e.target.value) || 0)}
+                                  />
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>h/sem</span>
+                                </div>
+                              </div>
+
+                              {/* Quick % Pills */}
+                              <div className={styles.quickPillsRow}>
+                                <span style={{ fontSize: '0.6875rem', color: '#94A3B8', fontWeight: 700 }}>Asignar rápido:</span>
+                                {[10, 25, 33.3, 50, 75, 100].map(pVal => (
+                                  <button
+                                    key={pVal}
+                                    type="button"
+                                    onClick={() => handlePctChange(realWorkerIdx, alloc.projectId, pVal)}
+                                    className={`${styles.quickPillBtn} ${Math.abs(allocPct - pVal) < 1 ? styles.quickPillBtnActive : ''}`}
+                                  >
+                                    {pVal === 33.3 ? '1/3' : `${pVal}%`}
+                                  </button>
+                                ))}
+                                {freePct > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePctChange(realWorkerIdx, alloc.projectId, allocPct + freePct)}
+                                    className={styles.quickPillBtn}
+                                    style={{ background: '#EFF6FF', color: '#2563EB', borderColor: '#93C5FD' }}
+                                  >
+                                    + Todo Libre ({freePct.toFixed(0)}%)
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Cost Box */}
+                            <div className={styles.economicImpactBox}>
+                              <div className={styles.costMonthVal}>{formatCurrency(costMonth)}/mes</div>
+                              <div className={styles.costYearSub}>{formatCurrency(costYear)} / año</div>
+                            </div>
+
+                            {/* Delete allocation button */}
+                            <button
+                              type="button"
+                              onClick={() => handleHourChange(realWorkerIdx, alloc.projectId, 0)}
+                              className={styles.removeAllocBtn}
+                              title="Quitar este proyecto"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Add Project to Worker Row */}
+                  {unassignedProjects.length > 0 && (
+                    <div className={styles.addProjectDropdownRow}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} color="#0D9488" />
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#0D3A5F' }}>
+                          Asignar a un nuevo proyecto ({unassignedProjects.length} disponibles):
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {unassignedProjects.slice(0, 4).map(up => {
+                          const pIdx = allProjectItems.findIndex(p => p.id === up.id);
+                          const theme = getProjectTheme(up.id, pIdx >= 0 ? pIdx : 0);
+                          const defaultAddPct = freePct > 0 ? Math.min(50, freePct) : 25;
+
+                          return (
+                            <button
+                              key={up.id}
+                              type="button"
+                              onClick={() => handlePctChange(realWorkerIdx, up.id, defaultAddPct)}
+                              className={styles.btnSecondary}
+                              style={{ 
+                                fontSize: '0.75rem', 
+                                padding: '0.35rem 0.65rem',
+                                borderColor: theme.border,
+                                background: theme.light
+                              }}
+                            >
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: theme.bg }} />
+                              + {up.name.slice(0, 20)} ({defaultAddPct}%)
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* PESTAÑA 3: MATRIZ CUADRICULADA CLÁSICA (DIFF, FASES 1-4 & NÓMINAS)       */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'matrix360' && (
+        <div className={styles.matrixCard}>
+          <div className={styles.matrixHeader}>
+            <div>
+              <h2 className={styles.matrixTitle}>
+                <FileSpreadsheet size={20} color="#7C3AED" />
+                <span>Matriz Detallada con las 4 Fases del Ciclo de Vida</span>
+              </h2>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8125rem', color: '#64748B' }}>
+                Vista cuantitativa con las 4 minibarras por celda: 🔵 1. Solicitado | 🟣 2. Reformulado | 🟡 3. Nóminas SEPA | 🟢 4. Justificado RLC.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setActiveMode('visual_bars')}
+                className={styles.btnSecondary}
+                style={{ fontSize: '0.8125rem' }}
+              >
+                <Layers size={14} /> Ver Barras de Colores
+              </button>
+            </div>
+          </div>
+
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
               <thead>
                 <tr>
                   <th style={{ minWidth: '220px' }}>Trabajador / Categoría</th>
-                  <th style={{ minWidth: '100px' }}>Coste Empresa</th>
-                  {projects.map(p => (
-                    <th key={p.id} style={{ minWidth: '190px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <span>{p.name}</span>
-                        <span style={{ fontSize: '0.6875rem', color: '#009E96', fontWeight: 700 }}>
-                          {p.phase || 'En Ejecución'}
-                        </span>
-                      </div>
-                    </th>
-                  ))}
-                  <th style={{ minWidth: '120px' }}>Sede / Propia</th>
-                  <th style={{ minWidth: '130px' }}>Total Horas</th>
-                  <th style={{ minWidth: '140px' }}>Estado Proceso</th>
+                  <th style={{ minWidth: '110px' }}>Jornada Max</th>
+                  {projects.map((p, pIdx) => {
+                    const theme = getProjectTheme(p.id, pIdx);
+                    return (
+                      <th key={p.id} style={{ minWidth: '185px', borderTop: `3px solid ${theme.bg}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: theme.bg }} />
+                          <span>{p.name}</span>
+                        </div>
+                        <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#64748B' }}>{p.phase || 'En Ejecución'}</div>
+                      </th>
+                    );
+                  })}
+                  <th style={{ minWidth: '160px', borderTop: '3px solid #64748B' }}>
+                    Sede / Estructura
+                  </th>
+                  <th style={{ minWidth: '140px' }}>Dedicación Total</th>
+                  <th style={{ width: '90px' }}>Ficha</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredWorkers.map((w, wIdx) => {
-                  const totalH = (w.allocations || []).reduce((sum, a) => sum + (a.weeklyHours || 0), 0);
-                  const maxH = w.maxWeeklyHours || 37.5;
-                  const isOver = totalH > maxH;
-                  const pctOccupied = maxH > 0 ? Math.round((totalH / maxH) * 100) : 0;
-                  const salMes = w.pagas === 14 ? (w.salaryMonthly * 14) / 12 : w.salaryMonthly;
-                  const ssMes = (salMes * (w.ssPct || 31.4)) / 100;
-                  const totalCostMes = salMes + ssMes;
+                {filteredWorkers.map((worker) => {
+                  const realWorkerIdx = workers.findIndex(w => w.id === worker.id);
+                  const maxH = worker.maxWeeklyHours || 37.5;
+                  const totalAllocHours = (worker.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
+                  const isOver = totalAllocHours > maxH;
+                  const pct = maxH > 0 ? (totalAllocHours / maxH) * 100 : 0;
 
                   return (
-                    <tr key={w.id}>
-                      {/* Name & Role (Clickable to open drawer) */}
+                    <tr key={worker.id}>
                       <td>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedWorkerId(w.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            padding: 0,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '2px'
-                          }}
-                        >
-                          <strong style={{ color: '#0D3A5F', fontSize: '0.9375rem', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
-                            {w.name}
-                          </strong>
-                          <span style={{ fontSize: '0.75rem', color: '#64748B' }}>{w.role}</span>
-                          <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>{w.category}</span>
-                        </button>
+                        <strong style={{ color: '#0D3A5F', fontSize: '0.9375rem' }}>{worker.name}</strong>
+                        <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{worker.role}</div>
+                        <div style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>{formatCurrency(worker.salaryMonthly)}/mes · {worker.contractType || 'Indefinido'}</div>
                       </td>
 
-                      {/* Coste Empresa */}
-                      <td>
-                        <strong style={{ color: '#0D3A5F', fontSize: '0.875rem' }}>{formatCurrency(totalCostMes)}</strong>
-                        <div style={{ fontSize: '0.6875rem', color: '#64748B' }}>Bruto: {formatCurrency(w.salaryMonthly)}</div>
+                      <td style={{ fontWeight: 700, color: '#0D3A5F' }}>
+                        {maxH} h/sem
                       </td>
 
-                      {/* Projects cells */}
-                      {projects.map(p => {
-                        const alloc = w.allocations.find(a => a.projectId === p.id);
+                      {/* Projects cells with 4 Mini-Bars */}
+                      {projects.map((p) => {
+                        const alloc = worker.allocations.find(a => a.projectId === p.id);
                         const h = alloc?.weeklyHours || 0;
-                        const key = `${w.id}_${p.id}`;
+                        const key = `${worker.id}_${p.id}`;
                         const lc = initialLifecycleMap[key];
 
                         return (
-                          <td key={p.id}>
-                            <div className={`${styles.cell4BarsContainer} ${h > 0 ? styles.cell4BarsActive : ''}`}>
-                              {/* Input row */}
+                          <td key={p.id} className={h > 0 ? styles.cellAllocated : undefined}>
+                            <div className={styles.cell4BarsContainer}>
                               <div className={styles.cellInputRow}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                   <input
@@ -472,7 +1009,7 @@ export function GlobalImputationMatrix({
                                     step="0.5"
                                     className={styles.inputNumber}
                                     value={h}
-                                    onChange={e => handleHourChange(wIdx, p.id, parseFloat(e.target.value) || 0)}
+                                    onChange={e => handleHourChange(realWorkerIdx, p.id, parseFloat(e.target.value) || 0)}
                                   />
                                   <span className={styles.hoursUnitLabel}>h/sem</span>
                                 </div>
@@ -493,35 +1030,28 @@ export function GlobalImputationMatrix({
 
                                 return (
                                   <div className={styles.fourBarsBox}>
-                                    {/* 1. Solicitud */}
-                                    <div className={styles.barLine} title={`1. Solicitud original: ${solH}h/sem (${solP.toFixed(0)}% jornada)`}>
+                                    <div className={styles.barLine} title={`1. Solicitud: ${solH}h/sem`}>
                                       <span className={styles.barTagSol}>1. SOL</span>
                                       <div className={styles.barTrack}>
                                         <div className={styles.barFillSol} style={{ width: `${Math.min(100, solP)}%` }} />
                                       </div>
                                       <span className={styles.barNumber}>{solH}h</span>
                                     </div>
-
-                                    {/* 2. Reformulación */}
-                                    <div className={styles.barLine} title={`2. Reformulación / Concedido: ${h}h/sem (${refP.toFixed(0)}% jornada)`}>
+                                    <div className={styles.barLine} title={`2. Reformulación / Concedido: ${h}h/sem`}>
                                       <span className={styles.barTagRef}>2. REF</span>
                                       <div className={styles.barTrack}>
                                         <div className={styles.barFillRef} style={{ width: `${Math.min(100, refP)}%` }} />
                                       </div>
                                       <span className={styles.barNumber}>{h}h</span>
                                     </div>
-
-                                    {/* 3. Ejecución Real */}
-                                    <div className={styles.barLine} title={`3. Ejecución real: ${pMonths}/${tMonths} meses de nóminas transferidas con SEPA`}>
+                                    <div className={styles.barLine} title={`3. Nóminas pagadas: ${pMonths}/${tMonths}m`}>
                                       <span className={styles.barTagEjec}>3. EJE</span>
                                       <div className={styles.barTrack}>
                                         <div className={styles.barFillEjec} style={{ width: `${Math.min(100, ejeP)}%` }} />
                                       </div>
                                       <span className={styles.barNumber}>{pMonths}/{tMonths}m</span>
                                     </div>
-
-                                    {/* 4. Justificación Final */}
-                                    <div className={styles.barLine} title={`4. Justificación contable: ${jusP}% liquidado con comprobantes y RLC`}>
+                                    <div className={styles.barLine} title={`4. Justificación contable: ${jusP}% liquidado`}>
                                       <span className={styles.barTagJust}>4. JUS</span>
                                       <div className={styles.barTrack}>
                                         <div className={styles.barFillJust} style={{ width: `${Math.min(100, jusP)}%` }} />
@@ -536,55 +1066,50 @@ export function GlobalImputationMatrix({
                         );
                       })}
 
-                      {/* Sede / Propia */}
+                      {/* Sede / Estructura */}
                       <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="40"
-                          step="0.5"
-                          className={styles.inputNumber}
-                          value={w.allocations.find(a => a.projectId === 'sede')?.weeklyHours || 0}
-                          onChange={e => handleHourChange(wIdx, 'sede', parseFloat(e.target.value) || 0)}
-                        />
-                      </td>
-
-                      {/* Total Horas */}
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <strong style={{ fontSize: '1rem', color: isOver ? '#DC2626' : '#0D3A5F' }}>
-                            {totalH.toFixed(1)}h <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>/ {maxH}h</span>
-                          </strong>
-                          <div style={{ background: '#E2E8F0', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div
-                              style={{
-                                width: `${Math.min(100, pctOccupied)}%`,
-                                height: '100%',
-                                background: isOver ? '#DC2626' : pctOccupied >= 80 ? '#16A34A' : '#2563EB',
-                              }}
-                            />
-                          </div>
-                          <span style={{ fontSize: '0.6875rem', color: isOver ? '#DC2626' : '#64748B', fontWeight: 700 }}>
-                            {pctOccupied}% Jornada
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            max={maxH}
+                            step="0.5"
+                            className={styles.inputNumber}
+                            value={worker.allocations.find(a => a.projectId === 'sede')?.weeklyHours || 0}
+                            onChange={e => handleHourChange(realWorkerIdx, 'sede', parseFloat(e.target.value) || 0)}
+                          />
+                          <span className={styles.hoursUnitLabel}>h/sem</span>
                         </div>
                       </td>
 
-                      {/* Status badge */}
+                      {/* Dedicación Total */}
                       <td>
-                        {isOver ? (
-                          <span className={styles.badgeDanger}>
-                            <AlertCircle size={13} /> +{(totalH - maxH).toFixed(1)}h Alerta
-                          </span>
-                        ) : pctOccupied >= 95 ? (
-                          <span className={styles.badgeOk}>
-                            <CheckCircle2 size={13} /> 100% Cubierto
-                          </span>
-                        ) : (
-                          <span className={styles.badgeWarn}>
-                            <Clock size={13} /> {(maxH - totalH).toFixed(1)}h Disponible
-                          </span>
-                        )}
+                        <div style={{ fontWeight: 800, color: isOver ? '#DC2626' : '#0D3A5F', fontSize: '0.9375rem' }}>
+                          {totalAllocHours.toFixed(1)} h/sem
+                        </div>
+                        <div>
+                          {isOver ? (
+                            <span className={styles.badgeDanger} style={{ fontSize: '0.6875rem' }}>
+                              ⚠️ {pct.toFixed(0)}%
+                            </span>
+                          ) : (
+                            <span className={styles.badgeOk} style={{ fontSize: '0.6875rem' }}>
+                              ✓ {pct.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Drawer Button */}
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWorkerId(worker.id)}
+                          className={styles.btnSecondary}
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}
+                        >
+                          Ficha 360°
+                        </button>
                       </td>
                     </tr>
                   );
@@ -592,393 +1117,184 @@ export function GlobalImputationMatrix({
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* MODE 2: COMPARATIVA DIFF (SOLICITADO VS CONCEDIDO VS REAL) */}
-        {activeMode === 'diff' && (
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th style={{ minWidth: '220px' }}>Trabajador</th>
-                  {projects.map(p => (
-                    <th key={p.id} colSpan={3} style={{ textAlign: 'center', borderLeft: '2px solid #CBD5E1' }}>
-                      {p.name}
-                    </th>
-                  ))}
-                  <th style={{ minWidth: '140px', borderLeft: '2px solid #CBD5E1' }}>Total Masa Salarial</th>
-                </tr>
-                <tr>
-                  <th></th>
-                  {projects.map(p => (
-                    <React.Fragment key={p.id}>
-                      <th style={{ fontSize: '0.6875rem', background: '#EEF2FF', color: '#3730A3', borderLeft: '2px solid #CBD5E1' }}>1. Solicitado</th>
-                      <th style={{ fontSize: '0.6875rem', background: '#F5F3FF', color: '#5B21B6' }}>2. Concedido</th>
-                      <th style={{ fontSize: '0.6875rem', background: '#ECFDF5', color: '#065F46' }}>3. Ejecutado</th>
-                    </React.Fragment>
-                  ))}
-                  <th style={{ borderLeft: '2px solid #CBD5E1' }}>Desviación (€)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredWorkers.map(w => {
-                  const salMes = w.pagas === 14 ? (w.salaryMonthly * 14) / 12 : w.salaryMonthly;
-                  const ssMes = (salMes * (w.ssPct || 31.4)) / 100;
-                  const costeEmpresaMes = salMes + ssMes;
-                  const maxH = w.maxWeeklyHours || 37.5;
-
-                  let rowSolicitadoTotal = 0;
-                  let rowConcedidoTotal = 0;
-                  let rowEjecutadoTotal = 0;
-
-                  return (
-                    <tr key={w.id}>
-                      <td>
-                        <strong style={{ color: '#0D3A5F' }}>{w.name}</strong>
-                        <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{w.role}</div>
-                      </td>
-
-                      {projects.map(p => {
-                        const key = `${w.id}_${p.id}`;
-                        const lc = initialLifecycleMap[key];
-                        const alloc = w.allocations.find(a => a.projectId === p.id);
-                        const refHours = alloc?.weeklyHours || 0;
-                        const solHours = lc?.solicitadoHours || refHours;
-                        const solCost = (costeEmpresaMes * (solHours / maxH)) * 12;
-                        const refCost = (costeEmpresaMes * (refHours / maxH)) * 12;
-                        const ejecCost = lc?.ejecutadoPaidAmount || (refCost * 0.5);
-
-                        rowSolicitadoTotal += solCost;
-                        rowConcedidoTotal += refCost;
-                        rowEjecutadoTotal += ejecCost;
-
-                        return (
-                          <React.Fragment key={p.id}>
-                            <td style={{ borderLeft: '2px solid #E2E8F0', background: '#FAFAFE' }}>
-                              <span style={{ fontWeight: 700, color: '#3730A3' }}>{solHours}h</span>
-                              <div style={{ fontSize: '0.6875rem', color: '#6366F1' }}>{formatCurrency(solCost)}</div>
-                            </td>
-                            <td style={{ background: '#FCFAFF' }}>
-                              <span style={{ fontWeight: 800, color: '#5B21B6' }}>{refHours}h</span>
-                              <div style={{ fontSize: '0.6875rem', color: '#7C3AED' }}>{formatCurrency(refCost)}</div>
-                            </td>
-                            <td style={{ background: '#FAFEFB' }}>
-                              <span style={{ fontWeight: 800, color: '#065F46' }}>{lc?.ejecutadoMonthsPaid || 6}/12m</span>
-                              <div style={{ fontSize: '0.6875rem', color: '#059669' }}>{formatCurrency(ejecCost)}</div>
-                            </td>
-                          </React.Fragment>
-                        );
-                      })}
-
-                      <td style={{ borderLeft: '2px solid #CBD5E1' }}>
-                        <strong style={{ color: '#0D3A5F', fontSize: '0.875rem' }}>
-                          {formatCurrency(rowConcedidoTotal)}
-                        </strong>
-                        <div style={{ fontSize: '0.6875rem', color: rowConcedidoTotal <= rowSolicitadoTotal ? '#166534' : '#DC2626', fontWeight: 700 }}>
-                          Diff Solicitud: {formatCurrency(rowConcedidoTotal - rowSolicitadoTotal)}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* MODE 3: MALLA MENSUAL DE NÓMINAS & SEPA (12 MESES) */}
-        {activeMode === 'monthly' && (
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th style={{ minWidth: '220px' }}>Trabajador & Proyecto</th>
-                  {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map(m => (
-                    <th key={m} style={{ textAlign: 'center', width: '55px', minWidth: '55px', padding: '0.5rem 0.2rem' }}>
-                      {m}
-                    </th>
-                  ))}
-                  <th style={{ minWidth: '120px' }}>Nóminas Pagadas</th>
-                  <th style={{ minWidth: '120px' }}>RLC / TC1 TGSS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredWorkers.flatMap(w => {
-                  const activeAllocations = w.allocations.filter(a => a.projectId && a.projectId !== 'sede' && a.weeklyHours > 0);
-                  if (activeAllocations.length === 0) return [];
-
-                  return activeAllocations.map(alloc => {
-                    const key = `${w.id}_${alloc.projectId}`;
-                    const lc = initialLifecycleMap[key];
-                    const payrolls = lc?.payrolls || [];
-
-                    return (
-                      <tr key={`${w.id}_${alloc.projectId}`}>
-                        <td>
-                          <strong style={{ color: '#0D3A5F' }}>{w.name}</strong>
-                          <div style={{ fontSize: '0.75rem', color: '#009E96', fontWeight: 700 }}>
-                            {alloc.projectName} ({alloc.weeklyHours}h/sem)
-                          </div>
-                        </td>
-
-                        {payrolls.map(p => (
-                          <td key={p.mes} style={{ textAlign: 'center', padding: '0.4rem 0.2rem' }}>
-                            <div
-                              title={`${p.nombreMes}: Imputado ${formatCurrency(p.importeImputado)} | ${p.justificantePago ? '✓ Transferencia SEPA y Recibo Nómina adjuntos' : '⏳ Pendiente de pago/justificante'}`}
-                              style={{
-                                background: p.justificantePago ? '#DCFCE7' : '#F1F5F9',
-                                color: p.justificantePago ? '#166534' : '#94A3B8',
-                                border: p.justificantePago ? '1px solid #86EFAC' : '1px solid #E2E8F0',
-                                borderRadius: '6px',
-                                padding: '0.25rem 0.1rem',
-                                fontSize: '0.6875rem',
-                                fontWeight: 800,
-                                cursor: 'default'
-                              }}
-                            >
-                              {p.justificantePago ? '✓' : '—'}
-                            </div>
-                          </td>
-                        ))}
-
-                        <td>
-                          <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#166534', background: '#DCFCE7', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
-                            {payrolls.filter(p => p.justificantePago).length} / 12 meses
-                          </span>
-                        </td>
-
-                        <td>
-                          <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#0D3A5F', background: '#EAF5FB', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
-                            ✓ Liquidado TGSS
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  });
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* MODE 4: AUDITOR ANTIFRAUDE Y DOBLE FINANCIACIÓN */}
-        {activeMode === 'auditor' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1.25rem' }}>
-              <h3 style={{ margin: '0 0 0.5rem 0', color: '#0D3A5F', fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <ShieldCheck size={20} color="#16C7B2" /> Reglas de Control Horario y No Duplicidad (Art. 19 y 31 Ley General de Subvenciones)
-              </h3>
-              <p style={{ fontSize: '0.8125rem', color: '#475569', margin: 0 }}>
-                El auditor evalúa que ninguna persona de la entidad supere las 37,5h o 40h semanales de dedicación contractual acumulada entre todas las subvenciones y que el coste imputado no supere el 100% del coste salarial real de la entidad.
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* PESTAÑA 4: AUDITOR ANTIFRAUDE DE JORNADA                                 */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'auditor' && (
+        <div className={styles.visualCard}>
+          <div style={{ background: overAllocatedWorkers.length > 0 ? '#FEF2F2' : '#F0FDF4', border: `1.5px solid ${overAllocatedWorkers.length > 0 ? '#FCA5A5' : '#86EFAC'}`, borderRadius: '12px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <ShieldCheck size={32} color={overAllocatedWorkers.length > 0 ? '#DC2626' : '#16A34A'} />
+            <div>
+              <strong style={{ color: overAllocatedWorkers.length > 0 ? '#991B1B' : '#166534', fontSize: '1rem' }}>
+                {overAllocatedWorkers.length === 0 
+                  ? '✅ Toda la Plantilla Cumple Estrictamente la Jornada Laboral Máxima' 
+                  : `⚠️ Se han detectado ${overAllocatedWorkers.length} trabajador/es con sobreimputación de jornada`}
+              </strong>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8125rem', color: overAllocatedWorkers.length > 0 ? '#B91C1C' : '#15803D' }}>
+                Control preventivo de doble financiación conforme al Art. 34 del Estatuto de los Trabajadores y los Arts. 19 y 31 de la Ley 38/2003 General de Subvenciones.
               </p>
             </div>
+          </div>
 
-            {overAllocatedWorkers.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {overAllocatedWorkers.map(w => {
-                  const totalH = (w.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Trabajador</th>
+                  <th>Jornada Contractual Máxima</th>
+                  <th>Horas Imputadas en Proyectos</th>
+                  <th>Horas en Sede</th>
+                  <th>Horas Totales Asignadas</th>
+                  <th>Exceso Ilegal</th>
+                  <th>Dictamen</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workers.map((w, wIdx) => {
                   const maxH = w.maxWeeklyHours || 37.5;
-                  const excess = (totalH - maxH).toFixed(1);
+                  const totalH = (w.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
+                  const sedeH = w.allocations.find(a => a.projectId === 'sede')?.weeklyHours || 0;
+                  const projH = totalH - sedeH;
+                  const isOver = totalH > maxH;
+                  const diff = totalH - maxH;
 
                   return (
-                    <div key={w.id} style={{ background: '#FEF2F2', border: '1.5px solid #FCA5A5', borderRadius: '10px', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                      <div>
-                        <strong style={{ color: '#991B1B', fontSize: '0.9375rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <AlertTriangle size={16} color="#DC2626" /> {w.name} ({w.role}) — Sobreimputación de +{excess} horas/semana
-                        </strong>
-                        <p style={{ fontSize: '0.8125rem', color: '#7F1D1D', margin: '0.25rem 0 0 0' }}>
-                          Dedicación actual: <strong>{totalH.toFixed(1)}h/sem</strong> sobre un máximo legal contratado de <strong>{maxH}h/sem</strong>.
-                        </p>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                          {w.allocations.filter(a => a.weeklyHours > 0).map(a => (
-                            <span key={a.id} style={{ background: 'white', border: '1px solid #FCA5A5', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', color: '#991B1B', fontWeight: 700 }}>
-                              {a.projectName}: {a.weeklyHours}h
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedWorkerId(w.id)}
-                        className={styles.btnSecondary}
-                        style={{ borderColor: '#DC2626', color: '#991B1B' }}
-                      >
-                        Ajustar en Ficha 360°
-                      </button>
-                    </div>
+                    <tr key={w.id} style={{ background: isOver ? '#FFF5F5' : undefined }}>
+                      <td>
+                        <strong>{w.name}</strong>
+                        <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{w.role}</div>
+                      </td>
+                      <td>{maxH} h/sem</td>
+                      <td>{projH.toFixed(1)} h/sem</td>
+                      <td>{sedeH.toFixed(1)} h/sem</td>
+                      <td>
+                        <strong style={{ color: isOver ? '#DC2626' : '#0D3A5F' }}>{totalH.toFixed(1)} h/sem</strong>
+                      </td>
+                      <td>
+                        {isOver ? (
+                          <strong style={{ color: '#DC2626' }}>+{diff.toFixed(1)} h/sem</strong>
+                        ) : (
+                          <span style={{ color: '#16A34A' }}>0 h (Libre: {Math.abs(diff).toFixed(1)}h)</span>
+                        )}
+                      </td>
+                      <td>
+                        {isOver ? (
+                          <span className={styles.badgeDanger}>⚠️ Riesgo Doble Financiación</span>
+                        ) : (
+                          <span className={styles.badgeOk}>✓ Conforme a Ley</span>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedWorkerId(w.id);
+                            setActiveMode('interactive_editor');
+                          }}
+                          className={styles.btnSecondary}
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                        >
+                          Ajustar %
+                        </button>
+                      </td>
+                    </tr>
                   );
                 })}
-              </div>
-            ) : (
-              <div style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '10px', padding: '1.5rem', textAlign: 'center' }}>
-                <CheckCircle2 size={32} color="#16A34A" style={{ margin: '0 auto 0.5rem auto' }} />
-                <h4 style={{ margin: '0 0 0.25rem 0', color: '#166534', fontSize: '1rem', fontWeight: 800 }}>
-                  ✓ 100% Conforme: Sin Doble Imputación ni Solapamiento Horario
-                </h4>
-                <p style={{ margin: 0, fontSize: '0.8125rem', color: '#14532D' }}>
-                  Todos los trabajadores de la entidad están dentro de su jornada laboral máxima legal.
-                </p>
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* DRAWER: FICHA 360° DEL TRABAJADOR */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* DRAWER LATERAL: FICHA 360° DEL TRABAJADOR SELECCIONADO                   */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
       {selectedWorker && (
         <div className={styles.drawerOverlay} onClick={() => setSelectedWorkerId(null)}>
           <div className={styles.drawerContent} onClick={e => e.stopPropagation()}>
             <div className={styles.drawerHeader}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>
-                  👤 Ficha 360°: {selectedWorker.name}
-                </h3>
-                <span style={{ fontSize: '0.8125rem', color: '#64748B' }}>
-                  {selectedWorker.role} · {selectedWorker.category}
-                </span>
+                <h3 className={styles.drawerTitle}>{selectedWorker.name}</h3>
+                <span className={styles.drawerSubtitle}>{selectedWorker.role} · Ficha de Imputación 360°</span>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedWorkerId(null)}
-                className={styles.closeBtn}
+                className={styles.closeDrawerBtn}
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className={styles.drawerBody}>
-              {/* Summary card */}
-              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: '10px', padding: '1rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div>
-                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>Salario Bruto Mensual</span>
-                    <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>{formatCurrency(selectedWorker.salaryMonthly)}</div>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>Coste SS Empresa ({selectedWorker.ssPct || 31.4}%)</span>
-                    <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#009E96' }}>
-                      {formatCurrency((selectedWorker.salaryMonthly * (selectedWorker.ssPct || 31.4)) / 100)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Progress of hours distribution */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8125rem', fontWeight: 700 }}>
-                  <span style={{ color: '#0D3A5F' }}>Distribución de la Jornada Laboral</span>
-                  <span style={{ color: '#64748B' }}>
-                    {(selectedWorker.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0).toFixed(1)}h / {selectedWorker.maxWeeklyHours || 37.5}h
-                  </span>
-                </div>
-                <div style={{ background: '#E2E8F0', height: '10px', borderRadius: '5px', overflow: 'hidden', display: 'flex' }}>
-                  {selectedWorker.allocations.filter(a => a.weeklyHours > 0).map((a, i) => {
-                    const colors = ['#2563EB', '#7C3AED', '#0D9488', '#EA580C', '#64748B'];
-                    const pct = ((a.weeklyHours / (selectedWorker.maxWeeklyHours || 37.5)) * 100);
-                    return (
-                      <div
-                        key={a.id}
-                        title={`${a.projectName}: ${a.weeklyHours}h (${pct.toFixed(0)}%)`}
-                        style={{
-                          width: `${pct}%`,
-                          height: '100%',
-                          background: colors[i % colors.length],
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Project breakdown cards */}
-              <h4 style={{ margin: '0.5rem 0 0 0', fontSize: '0.9375rem', fontWeight: 800, color: '#0D3A5F' }}>
-                Proyectos y Subvenciones Asignadas
-              </h4>
-
-              {selectedWorker.allocations.filter(a => a.projectId && a.projectId !== 'sede').map(alloc => {
-                const key = `${selectedWorker.id}_${alloc.projectId}`;
-                const lc = initialLifecycleMap[key];
-
+              {/* Cost Summary */}
+              {(() => {
                 const maxH = selectedWorker.maxWeeklyHours || 37.5;
-                const h = alloc.weeklyHours;
-                const solH = lc?.solicitadoHours !== undefined ? lc.solicitadoHours : h;
-                const solP = maxH > 0 ? (solH / maxH) * 100 : 0;
-                const refP = maxH > 0 ? (h / maxH) * 100 : 0;
-                const pMonths = lc?.ejecutadoMonthsPaid !== undefined ? lc.ejecutadoMonthsPaid : (h > 0 ? 6 : 0);
-                const tMonths = lc?.ejecutadoTotalMonths || 12;
-                const ejeP = tMonths > 0 && h > 0 ? (pMonths / tMonths) * 100 : 0;
-                const jusP = h > 0 ? (pMonths >= tMonths ? 100 : Math.round((pMonths / tMonths) * 100)) : 0;
+                const totalH = (selectedWorker.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
+                const salMes = selectedWorker.pagas === 14 ? (selectedWorker.salaryMonthly * 14) / 12 : selectedWorker.salaryMonthly;
+                const ssMes = (salMes * (selectedWorker.ssPct || 31.4)) / 100;
+                const costeEmpresaMes = salMes + ssMes;
+                const isOver = totalH > maxH;
 
                 return (
-                  <div key={alloc.id} style={{ background: 'white', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                       <div>
-                        <strong style={{ color: '#0D3A5F', fontSize: '0.9375rem' }}>{alloc.projectName}</strong>
-                        <span style={{ fontSize: '0.6875rem', color: '#009E96', fontWeight: 700, marginLeft: '0.5rem' }}>
-                          {projects.find(p => p.id === alloc.projectId)?.phase || 'En Ejecución'}
-                        </span>
+                        <span style={{ fontSize: '0.6875rem', color: '#64748B', fontWeight: 800 }}>SALARIO BRUTO</span>
+                        <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>{formatCurrency(selectedWorker.salaryMonthly)}/m</div>
                       </div>
-                      <Link
-                        href={`/dashboard/proyectos/${alloc.projectId}`}
-                        style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '2px', textDecoration: 'none' }}
-                      >
-                        Ver Expediente <ExternalLink size={12} />
-                      </Link>
-                    </div>
-
-                    {/* 4 Mini-Bars in Drawer */}
-                    <div className={styles.fourBarsBox}>
-                      <div className={styles.barLine} title={`1. Solicitado original: ${solH}h`}>
-                        <span className={styles.barTagSol}>1. SOL</span>
-                        <div className={styles.barTrack}>
-                          <div className={styles.barFillSol} style={{ width: `${Math.min(100, solP)}%` }} />
-                        </div>
-                        <span className={styles.barNumber}>{solH}h</span>
-                      </div>
-
-                      <div className={styles.barLine} title={`2. Reformulado / Aprobado: ${h}h`}>
-                        <span className={styles.barTagRef}>2. REF</span>
-                        <div className={styles.barTrack}>
-                          <div className={styles.barFillRef} style={{ width: `${Math.min(100, refP)}%` }} />
-                        </div>
-                        <span className={styles.barNumber}>{h}h</span>
-                      </div>
-
-                      <div className={styles.barLine} title={`3. Ejecutado: ${pMonths}/${tMonths} nóminas pagadas`}>
-                        <span className={styles.barTagEjec}>3. EJE</span>
-                        <div className={styles.barTrack}>
-                          <div className={styles.barFillEjec} style={{ width: `${Math.min(100, ejeP)}%` }} />
-                        </div>
-                        <span className={styles.barNumber}>{pMonths}/{tMonths}m</span>
-                      </div>
-
-                      <div className={styles.barLine} title={`4. Justificado: ${jusP}% liquidado`}>
-                        <span className={styles.barTagJust}>4. JUS</span>
-                        <div className={styles.barTrack}>
-                          <div className={styles.barFillJust} style={{ width: `${Math.min(100, jusP)}%` }} />
-                        </div>
-                        <span className={styles.barNumber}>{jusP}%</span>
+                      <div>
+                        <span style={{ fontSize: '0.6875rem', color: '#64748B', fontWeight: 800 }}>COSTE EMPRESA MES</span>
+                        <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>{formatCurrency(costeEmpresaMes)}/m</div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', background: '#F8FAFC', padding: '0.5rem', borderRadius: '6px' }}>
-                      <div>
-                        <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>Dedicación</span>
-                        <div style={{ fontWeight: 800, color: '#0D3A5F' }}>{alloc.weeklyHours} h/sem</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>Nóminas Pagadas</span>
-                        <div style={{ fontWeight: 800, color: '#16A34A' }}>{pMonths} / {tMonths} m</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>Total Justificado</span>
-                        <div style={{ fontWeight: 800, color: '#009E96' }}>{formatCurrency(lc?.ejecutadoPaidAmount || 0)}</div>
-                      </div>
-                    </div>
+                    {/* Breakdown by project */}
+                    <h4 style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem', fontWeight: 800, color: '#0D3A5F' }}>
+                      Reparto de Horas y Costes por Proyecto:
+                    </h4>
+
+                    {selectedWorker.allocations.filter(a => a.weeklyHours > 0).map(alloc => {
+                      const pIdx = allProjectItems.findIndex(p => p.id === alloc.projectId);
+                      const theme = getProjectTheme(alloc.projectId, pIdx >= 0 ? pIdx : 0);
+                      const allocPct = maxH > 0 ? (alloc.weeklyHours / maxH) * 100 : 0;
+                      const cMes = costeEmpresaMes * (allocPct / 100);
+
+                      return (
+                        <div key={alloc.projectId} style={{ background: 'white', border: `1.5px solid ${theme.border}`, borderRadius: '10px', padding: '0.85rem 1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: theme.bg }} />
+                              <strong style={{ fontSize: '0.875rem', color: '#0D3A5F' }}>{alloc.projectName}</strong>
+                            </div>
+                            <strong style={{ color: theme.bg, fontSize: '0.9375rem' }}>{allocPct.toFixed(1)}% ({alloc.weeklyHours}h)</strong>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Coste mensual imputado:</span>
+                            <strong>{formatCurrency(cMes)}/mes</strong>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedWorkerId(null);
+                        setActiveMode('interactive_editor');
+                      }}
+                      className={styles.btnPrimary}
+                      style={{ marginTop: '0.5rem' }}
+                    >
+                      <SlidersHorizontal size={16} /> Abrir en Asignador de Porcentajes
+                    </button>
                   </div>
                 );
-              })}
+              })()}
             </div>
           </div>
         </div>
@@ -986,5 +1302,3 @@ export function GlobalImputationMatrix({
     </div>
   );
 }
-
-export default GlobalImputationMatrix;

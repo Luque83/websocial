@@ -583,3 +583,453 @@
   text-align: right;
   white-space: nowrap;
 }
+
+/* ═════════════════════════════════════════════════════ */
+/* 1. MAPA VISUAL DE IMPUTACIONES (STACKED COLOR BARS)   */
+/* ═════════════════════════════════════════════════════ */
+
+.visualCard {
+  background: white;
+  border: 1.5px solid #D5ECF8;
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(13, 58, 95, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Project Color Palette Legend */
+.legendContainer {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1.15rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.legendHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.legendTitle {
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: #0D3A5F;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.legendGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.legendBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  border: 1.5px solid;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.legendColorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.8);
+}
+
+/* Worker Visual Row with Giant Multi-Color Stacked Bar */
+.visualWorkersList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.workerVisualRow {
+  background: white;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.workerVisualRow:hover {
+  border-color: #0D3A5F;
+  box-shadow: 0 6px 16px rgba(13, 58, 95, 0.08);
+}
+
+.workerVisualHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.workerInfoLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.workerAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #0D3A5F;
+  color: #16C7B2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.workerMetaName {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0D3A5F;
+  margin: 0;
+}
+
+.workerMetaSub {
+  font-size: 0.8125rem;
+  color: #64748B;
+  margin-top: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.workerStatusBadgeRight {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* The Big Multi-Color Stacked Bar */
+.stackedBarTrack {
+  width: 100%;
+  height: 38px;
+  background: #F1F5F9;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.stackedSegment {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 0.4rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.stackedSegment:hover {
+  filter: brightness(1.1);
+  transform: scaleY(1.04);
+  z-index: 2;
+}
+
+.stackedSegmentAvailable {
+  height: 100%;
+  background: repeating-linear-gradient(
+    45deg,
+    #F8FAFC,
+    #F8FAFC 8px,
+    #E2E8F0 8px,
+    #E2E8F0 16px
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748B;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 0 0.5rem;
+}
+
+.stackedSegmentOver {
+  height: 100%;
+  background: repeating-linear-gradient(
+    45deg,
+    #DC2626,
+    #DC2626 8px,
+    #991B1B 8px,
+    #991B1B 16px
+  );
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  animation: pulseWarning 2s infinite;
+}
+
+@keyframes pulseWarning {
+  0% { opacity: 0.9; }
+  50% { opacity: 1; }
+  100% { opacity: 0.9; }
+}
+
+/* Allocation Tag List under the bar */
+.allocTagsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.allocTagItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  color: #0D3A5F;
+}
+
+/* ═════════════════════════════════════════════════════ */
+/* 2. ASIGNADOR INTERACTIVO DE PORCENTAJES POR TRABAJADOR */
+/* ═════════════════════════════════════════════════════ */
+
+.editorCardsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.workerEditorCard {
+  background: white;
+  border: 2px solid #D5ECF8;
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 14px rgba(13, 58, 95, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.workerEditorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-bottom: 1.5px solid #F1F5F9;
+  padding-bottom: 1rem;
+}
+
+.workerEditorHeaderTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.allocationRowsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.allocationRowCard {
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  display: grid;
+  grid-template-columns: 240px 1fr 180px 40px;
+  align-items: center;
+  gap: 1.25rem;
+  transition: all 0.15s ease;
+}
+
+@media (max-width: 1024px) {
+  .allocationRowCard {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+}
+
+.allocationRowCard:hover {
+  background: white;
+  border-color: #0D3A5F;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.projectInfoBlock {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.projectColorSquare {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.projectNameText {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: #0D3A5F;
+  line-height: 1.2;
+}
+
+.projectPhaseSub {
+  font-size: 0.6875rem;
+  color: #64748B;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Slider and Quick Buttons Controls */
+.sliderControlBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.customRangeInput {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: #E2E8F0;
+  outline: none;
+  cursor: pointer;
+  accent-color: #0D3A5F;
+}
+
+.quickPillsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.quickPillBtn {
+  background: white;
+  border: 1px solid #CBD5E1;
+  color: #0D3A5F;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.quickPillBtn:hover {
+  background: #0D3A5F;
+  color: white;
+  border-color: #0D3A5F;
+}
+
+.quickPillBtnActive {
+  background: #0D3A5F;
+  color: white;
+  border-color: #0D3A5F;
+}
+
+/* Economic Impact Box */
+.economicImpactBox {
+  background: white;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  text-align: right;
+}
+
+.costMonthVal {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: #0D3A5F;
+}
+
+.costYearSub {
+  font-size: 0.6875rem;
+  color: #64748B;
+}
+
+.removeAllocBtn {
+  background: none;
+  border: none;
+  color: #94A3B8;
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.removeAllocBtn:hover {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.addProjectDropdownRow {
+  background: #F1F5F9;
+  border: 1.5px dashed #94A3B8;
+  border-radius: 10px;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
