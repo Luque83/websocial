@@ -260,32 +260,63 @@ export function ProjectWorkspace({
   ]);
 
   // 1.5 Personal
-  const [personal, setPersonal] = useState<ProjectWorkspaceData['personal']>(() => fullWorkspace?.personal || initialPers?.workers || [
-    {
-      id: 'pers-1',
-      workerId: 'w-1',
-      name: 'Elena Gómez',
-      role: 'Trabajadora Social / Coordinadora',
-      contractType: 'Indefinido',
-      monthlySalary: 2100,
-      ssPct: 31.4,
-      weeklyHours: 20,
-      maxWeeklyHours: 37.5,
-      months: 12,
-    },
-    {
-      id: 'pers-2',
-      workerId: 'w-2',
-      name: 'Carlos Ruiz',
-      role: 'Educador Social',
-      contractType: 'Temporal',
-      monthlySalary: 1850,
-      ssPct: 31.4,
-      weeklyHours: 18.75,
-      maxWeeklyHours: 37.5,
-      months: 10,
+  const [personal, setPersonal] = useState<ProjectWorkspaceData['personal']>(() => {
+    if (fullWorkspace?.personal && Array.isArray(fullWorkspace.personal) && fullWorkspace.personal.length > 0) {
+      return fullWorkspace.personal;
     }
-  ]);
+    if (initialPers?.workers && Array.isArray(initialPers.workers) && initialPers.workers.length > 0) {
+      return initialPers.workers;
+    }
+    // Verificar si el catálogo central tiene asignaciones previas para este proyecto
+    if (Array.isArray(staffCatalog) && staffCatalog.length > 0) {
+      const assignedFromCatalog = staffCatalog
+        .filter(w => (w.allocations || []).some(a => a.projectId === projectId && a.weeklyHours > 0))
+        .map(w => {
+          const alloc = (w.allocations || []).find(a => a.projectId === projectId)!;
+          return {
+            id: `pers-${w.id}`,
+            workerId: w.id,
+            name: w.name,
+            role: w.role,
+            contractType: w.contractType || 'Indefinido',
+            monthlySalary: w.salaryMonthly,
+            ssPct: w.ssPct || 31.4,
+            weeklyHours: alloc.weeklyHours,
+            maxWeeklyHours: w.maxWeeklyHours || 37.5,
+            months: alloc.months || 12,
+          };
+        });
+      if (assignedFromCatalog.length > 0) {
+        return assignedFromCatalog;
+      }
+    }
+    return [
+      {
+        id: 'pers-1',
+        workerId: 'w-1',
+        name: 'Elena Gómez',
+        role: 'Trabajadora Social / Coordinadora',
+        contractType: 'Indefinido',
+        monthlySalary: 2100,
+        ssPct: 31.4,
+        weeklyHours: 20,
+        maxWeeklyHours: 37.5,
+        months: 12,
+      },
+      {
+        id: 'pers-2',
+        workerId: 'w-2',
+        name: 'Carlos Ruiz',
+        role: 'Educador Social',
+        contractType: 'Temporal',
+        monthlySalary: 1850,
+        ssPct: 31.4,
+        weeklyHours: 18.75,
+        maxWeeklyHours: 37.5,
+        months: 10,
+      }
+    ];
+  });
 
   // 1.5.1 Nóminas Mensuales Detalladas (Ejecución Real)
   const [activePersonalSubTab, setActivePersonalSubTab] = useState<'prevision' | 'nominas_mensuales'>('prevision');
@@ -1720,9 +1751,9 @@ export function ProjectWorkspace({
             <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <Sliders size={20} color="#2563EB" />
               <div>
-                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación de Personal y Horas Asignadas (V2)</strong>
+                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación de Personal y Dedicación (V2) · 🔗 Conexión Continua 3.4 ↔ 3.5 ↔ Matriz</strong>
                 <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
-                  Ajusta las horas semanales o los meses de imputación de los trabajadores a la subvención para adaptarlos a la nueva dotación económica.
+                  Ajusta las horas semanales o los meses de imputación de los trabajadores a la subvención. <strong>Cualquier cambio se traslada automáticamente al Presupuesto 3.5 y a la Matriz de Imputación Multiproyecto</strong>.
                 </p>
               </div>
             </div>
@@ -2284,9 +2315,9 @@ export function ProjectWorkspace({
             <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <Sliders size={20} color="#2563EB" />
               <div>
-                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación Presupuestaria por Partidas (V2)</strong>
+                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación Presupuestaria por Partidas (V2) · 🔗 Conexión Continua 3.5 ↔ 3.4 ↔ Matriz</strong>
                 <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
-                  Presupuesto Solicitado: <strong>{formatCurrency(subvencion.importeSolicitado || totalPresupuesto)}</strong> | Subvención Concedida: <strong>{formatCurrency(subvencion.importeConcedido)}</strong>. Reajusta los importes de cada partida para cuadrar exactamente el presupuesto reformulado.
+                  Presupuesto Solicitado: <strong>{formatCurrency(subvencion.importeSolicitado || totalPresupuesto)}</strong> | Subvención Concedida: <strong>{formatCurrency(subvencion.importeConcedido)}</strong>. Las partidas de personal <strong>están vinculadas en tiempo real a 3.4 Personal y la Matriz de Imputación</strong>.
                 </p>
               </div>
             </div>
@@ -2457,10 +2488,17 @@ export function ProjectWorkspace({
                         <button
                           type="button"
                           onClick={() => {
+                            const newPartidas = presupuesto.partidas.filter(p => p.id !== partida.id);
                             setPresupuesto({
                               ...presupuesto,
-                              partidas: presupuesto.partidas.filter(p => p.id !== partida.id)
+                              partidas: newPartidas
                             });
+                            if (partida.category === 'personal') {
+                              const workerMatch = personal.find(w => w.id === partida.workerId || `pers-${w.id}` === partida.workerId || `p-${w.id}` === partida.id);
+                              if (workerMatch) {
+                                setPersonal(personal.filter(w => w.id !== workerMatch.id));
+                              }
+                            }
                             handleModify();
                           }}
                           className={styles.deleteIconBtn}

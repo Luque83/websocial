@@ -301,17 +301,26 @@ export async function getFullProjectWorkspaceData(projectId: string) {
 
   const toolsMap = new Map((tools || []).map(t => [t.tool_slug, t.data]));
 
-  // Also check if general personal matrix exists to provide available staff
+  // Also check if org staff catalog or general personal matrix exists to provide assigned staff
+  const { data: staffCatalogRecord } = await supabase
+    .from('project_tools')
+    .select('data')
+    .eq('tool_slug', 'org-staff-catalog')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const { data: matrixRecord } = await supabase
     .from('project_tools')
     .select('data')
     .eq('project_id', '00000000-0000-0000-0000-000000000000')
     .eq('tool_slug', 'matriz-personal-general')
-    .single();
+    .maybeSingle();
 
   return {
     project,
     toolsMap: Object.fromEntries(toolsMap),
+    staffCatalog: staffCatalogRecord?.data?.workers || null,
     generalMatrix: matrixRecord?.data || null,
   };
 }
