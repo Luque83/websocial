@@ -2391,8 +2391,18 @@ export function ProjectWorkspace({
                           value={partida.monthlyAmount}
                           onChange={e => {
                             const newP = [...presupuesto.partidas];
-                            newP[pIdx].monthlyAmount = parseFloat(e.target.value) || 0;
+                            const newAmount = parseFloat(e.target.value) || 0;
+                            newP[pIdx].monthlyAmount = newAmount;
                             setPresupuesto({ ...presupuesto, partidas: newP });
+                            if (partida.category === 'personal') {
+                              const workerMatch = personal.find(w => w.id === partida.workerId || `pers-${w.id}` === partida.workerId || `p-${w.id}` === partida.id);
+                              if (workerMatch) {
+                                const salMes = workerMatch.monthlySalary * (1 + (workerMatch.ssPct || 31.4) / 100);
+                                const maxH = workerMatch.maxWeeklyHours || 37.5;
+                                const newHours = salMes > 0 ? Number(((newAmount / salMes) * maxH).toFixed(2)) : workerMatch.weeklyHours;
+                                setPersonal(personal.map(w => w.id === workerMatch.id ? { ...w, weeklyHours: newHours } : w));
+                              }
+                            }
                             handleModify();
                           }}
                         />
@@ -2405,8 +2415,15 @@ export function ProjectWorkspace({
                           value={partida.months}
                           onChange={e => {
                             const newP = [...presupuesto.partidas];
-                            newP[pIdx].months = parseInt(e.target.value) || 0;
+                            const newMonths = parseInt(e.target.value) || 0;
+                            newP[pIdx].months = newMonths;
                             setPresupuesto({ ...presupuesto, partidas: newP });
+                            if (partida.category === 'personal') {
+                              const workerMatch = personal.find(w => w.id === partida.workerId || `pers-${w.id}` === partida.workerId || `p-${w.id}` === partida.id);
+                              if (workerMatch) {
+                                setPersonal(personal.map(w => w.id === workerMatch.id ? { ...w, months: newMonths } : w));
+                              }
+                            }
                             handleModify();
                           }}
                         />
@@ -2516,62 +2533,172 @@ export function ProjectWorkspace({
           <div className={styles.sectionHeader}>
             <div>
               <h2 className={styles.sectionTitle}><Calendar size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.6 Reformulación del Cronograma Temporal' : '7. Cronograma de Ejecución Temporal (Diagrama Gantt)'}</h2>
-              <p className={styles.sectionSubtitle}>Planifica la temporalización mes a mes de cada actividad del proyecto.</p>
+              <p className={styles.sectionSubtitle}>Planifica la temporalización mes a mes de las actividades y la dedicación del personal del proyecto.</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0D3A5F' }}>Duración Total:</span>
+              <select
+                className={styles.select}
+                style={{ width: '120px', padding: '0.35rem 0.5rem', fontWeight: 800 }}
+                value={cronograma.durationMonths || 12}
+                onChange={e => {
+                  const newDur = parseInt(e.target.value) || 12;
+                  setCronograma({ ...cronograma, durationMonths: newDur });
+                  handleModify();
+                }}
+              >
+                {[3, 6, 9, 10, 12, 18, 24].map(m => (
+                  <option key={m} value={m}>{m} Meses</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th style={{ minWidth: '240px' }}>Actividad</th>
-                  <th style={{ minWidth: '140px' }}>Responsable</th>
-                  {Array.from({ length: cronograma.durationMonths }, (_, i) => (
-                    <th key={i} style={{ textAlign: 'center', width: '36px', minWidth: '36px', padding: '0.4rem 0.2rem' }}>
-                      M{i + 1}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {cronograma.activities.map((act, aIdx) => (
-                  <tr key={act.id}>
-                    <td><strong>{act.description}</strong></td>
-                    <td>{act.responsible}</td>
-                    {Array.from({ length: cronograma.durationMonths }, (_, mIdx) => {
-                      const monthNum = mIdx + 1;
-                      const isActive = monthNum >= act.startMonth && monthNum <= act.endMonth;
-                      return (
-                        <td
-                          key={mIdx}
-                          onClick={() => {
-                            const newActs = [...cronograma.activities];
-                            if (monthNum < act.startMonth) newActs[aIdx].startMonth = monthNum;
-                            else if (monthNum > act.endMonth) newActs[aIdx].endMonth = monthNum;
-                            else {
-                              if (monthNum === act.startMonth && monthNum < act.endMonth) newActs[aIdx].startMonth = monthNum + 1;
-                              else newActs[aIdx].endMonth = monthNum - 1;
-                            }
-                            setCronograma({ ...cronograma, activities: newActs });
-                            handleModify();
-                          }}
-                          style={{
-                            background: isActive ? '#2563eb' : 'transparent',
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                            color: isActive ? 'white' : 'transparent',
-                            fontWeight: 700,
-                            userSelect: 'none'
-                          }}
-                        >
-                          {isActive ? '✓' : ''}
-                        </td>
-                      );
-                    })}
+          {/* TABLA 1: ACTIVIDADES */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0D3A5F', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span>📌 1. Cronograma de Actividades e Hitos</span>
+            </h3>
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: '240px' }}>Actividad</th>
+                    <th style={{ minWidth: '140px' }}>Responsable</th>
+                    {Array.from({ length: cronograma.durationMonths || 12 }, (_, i) => (
+                      <th key={i} style={{ textAlign: 'center', width: '36px', minWidth: '36px', padding: '0.4rem 0.2rem' }}>
+                        M{i + 1}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {cronograma.activities.map((act, aIdx) => (
+                    <tr key={act.id}>
+                      <td><strong>{act.description}</strong></td>
+                      <td>{act.responsible}</td>
+                      {Array.from({ length: cronograma.durationMonths || 12 }, (_, mIdx) => {
+                        const monthNum = mIdx + 1;
+                        const isActive = monthNum >= act.startMonth && monthNum <= act.endMonth;
+                        return (
+                          <td
+                            key={mIdx}
+                            onClick={() => {
+                              const newActs = [...cronograma.activities];
+                              if (monthNum < act.startMonth) newActs[aIdx].startMonth = monthNum;
+                              else if (monthNum > act.endMonth) newActs[aIdx].endMonth = monthNum;
+                              else {
+                                if (monthNum === act.startMonth && monthNum < act.endMonth) newActs[aIdx].startMonth = monthNum + 1;
+                                else newActs[aIdx].endMonth = monthNum - 1;
+                              }
+                              setCronograma({ ...cronograma, activities: newActs });
+                              handleModify();
+                            }}
+                            style={{
+                              background: isActive ? '#2563eb' : 'transparent',
+                              cursor: 'pointer',
+                              textAlign: 'center',
+                              color: isActive ? 'white' : 'transparent',
+                              fontWeight: 700,
+                              userSelect: 'none'
+                            }}
+                          >
+                            {isActive ? '✓' : ''}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* TABLA 2: TEMPORALIZACIÓN DE PERSONAL (SINCRONIZADA CON 3.4, 3.5 Y LA MATRIZ) */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0D3A5F', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span>👥 2. Temporalización y Meses de Imputación de Personal ({personal.length} técnicos)</span>
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: '#166534', background: '#DCFCE7', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                🔗 Sincronizado en tiempo real con 3.5 Presupuesto y Matriz de Imputación
+              </span>
+            </div>
+
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: '200px' }}>Trabajador / Puesto</th>
+                    <th style={{ minWidth: '90px' }}>Dedicación</th>
+                    <th style={{ minWidth: '80px', textAlign: 'center' }}>Total Meses</th>
+                    {Array.from({ length: cronograma.durationMonths || 12 }, (_, i) => (
+                      <th key={i} style={{ textAlign: 'center', width: '36px', minWidth: '36px', padding: '0.4rem 0.2rem' }}>
+                        M{i + 1}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {personal.map((worker, wIdx) => {
+                    const activeMonthsCount = worker.months || 12;
+
+                    return (
+                      <tr key={worker.id}>
+                        <td>
+                          <strong>{worker.name || 'Técnico'}</strong>
+                          <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{worker.role}</div>
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 800, color: '#0D3A5F' }}>{worker.weeklyHours} h/sem</span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            max={cronograma.durationMonths || 12}
+                            className={styles.input}
+                            style={{ width: '55px', textAlign: 'center', fontWeight: 800 }}
+                            value={activeMonthsCount}
+                            onChange={e => {
+                              const newM = Math.max(1, Math.min(cronograma.durationMonths || 12, parseInt(e.target.value) || 1));
+                              const newP = [...personal];
+                              newP[wIdx].months = newM;
+                              updatePersonalAndBudget(newP);
+                            }}
+                          />
+                        </td>
+                        {Array.from({ length: cronograma.durationMonths || 12 }, (_, mIdx) => {
+                          const monthNum = mIdx + 1;
+                          const isActive = monthNum <= activeMonthsCount;
+                          return (
+                            <td
+                              key={mIdx}
+                              onClick={() => {
+                                const newP = [...personal];
+                                newP[wIdx].months = monthNum;
+                                updatePersonalAndBudget(newP);
+                              }}
+                              style={{
+                                background: isActive ? '#10B981' : 'transparent',
+                                cursor: 'pointer',
+                                textAlign: 'center',
+                                color: isActive ? 'white' : 'transparent',
+                                fontWeight: 700,
+                                userSelect: 'none'
+                              }}
+                              title={`Imputar hasta el Mes ${monthNum} (${monthNum} meses)`}
+                            >
+                              {isActive ? '✓' : ''}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

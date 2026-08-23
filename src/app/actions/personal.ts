@@ -512,10 +512,17 @@ export async function savePersonalMatrixAction(
             partidas: [...newPersonalPartidas, ...nonPersonalPartidas],
           };
 
-          await saveToolData(targetProjectId, 'costes-proyecto', updatedCostesPayload);
-          await saveToolData(targetProjectId, 'personal-proyecto', { workers: updatedPersonalList });
+          // 4.5 Actualizar cronograma
+          const currentCronograma = (await getToolData(targetProjectId, 'cronograma') as Record<string, unknown> | null) || {};
+          const maxMonthsInProject = Math.max(...projectAssignments.map(pa => pa.alloc.months || 12), 12);
+          const updatedCronograma = {
+            ...currentCronograma,
+            durationMonths: maxMonthsInProject,
+          };
+          await saveToolData(targetProjectId, 'cronograma', updatedCronograma);
+          await saveToolData(targetProjectId, 'cronograma-actividades', updatedCronograma);
 
-          // 5. Si existe workspace completo, actualizar su personal y presupuesto
+          // 5. Si existe workspace completo, actualizar su personal, presupuesto y cronograma
           if (currentWorkspaceRaw) {
             const workspacePresupuesto = (currentWorkspaceRaw.presupuesto as Record<string, unknown>) || {};
             const workspaceExistingPartidas = Array.isArray(workspacePresupuesto.partidas)
@@ -531,6 +538,10 @@ export async function savePersonalMatrixAction(
               presupuesto: {
                 ...workspacePresupuesto,
                 partidas: [...newPersonalPartidas, ...workspaceNonPersonal],
+              },
+              cronograma: {
+                ...((currentWorkspaceRaw.cronograma as Record<string, unknown>) || {}),
+                durationMonths: maxMonthsInProject,
               }
             };
 
@@ -544,7 +555,8 @@ export async function savePersonalMatrixAction(
                   totalCoste: newPersonalPartidas.reduce((s, p) => s + (p.costeReal || 0), 0),
                   subvencionSolicitada: newPersonalPartidas.reduce((s, p) => s + (p.costeReal || 0), 0),
                 }
-              }
+              },
+              cronograma: updatedCronograma,
             };
             await saveToolData(targetProjectId, 'project-workspace-full', initialWorkspace);
           }

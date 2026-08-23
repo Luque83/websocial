@@ -160,6 +160,28 @@ export function GlobalImputationMatrix({
     handleHourChange(workerIdx, projectTargetId, computedHours);
   };
 
+  // Handler for months of duration change
+  const handleMonthsChange = (workerIdx: number, projectTargetId: string | undefined, months: number) => {
+    if (!projectTargetId) return;
+    const updated = [...workers];
+    const targetWorker = updated[workerIdx];
+    const allocIdx = targetWorker.allocations.findIndex(a => a.projectId === projectTargetId);
+
+    if (allocIdx >= 0) {
+      targetWorker.allocations[allocIdx].months = Math.max(1, Math.min(24, months));
+    } else {
+      targetWorker.allocations.push({
+        id: `alloc-${targetWorker.id}-${projectTargetId}`,
+        projectId: projectTargetId,
+        projectName: projects.find(p => p.id === projectTargetId)?.name || 'Proyecto',
+        weeklyHours: 0,
+        months: Math.max(1, Math.min(24, months)),
+      });
+    }
+
+    setWorkers(updated);
+  };
+
   const handleSaveAndSync = async () => {
     setIsSaving(true);
     try {
@@ -575,7 +597,7 @@ export function GlobalImputationMatrix({
                           title={`${alloc.projectName}: ${alloc.weeklyHours}h/sem (${allocPct.toFixed(1)}% de jornada) · ${formatCurrency(segmentCost)}/mes`}
                         >
                           {allocPct >= 12 ? (
-                            <span>{alloc.projectName.slice(0, 16)} · {allocPct.toFixed(0)}% ({alloc.weeklyHours}h)</span>
+                            <span>{alloc.projectName.slice(0, 16)} · {allocPct.toFixed(0)}% ({alloc.weeklyHours}h · {alloc.months || 12}m)</span>
                           ) : allocPct >= 6 ? (
                             <span>{allocPct.toFixed(0)}%</span>
                           ) : null}
@@ -824,38 +846,69 @@ export function GlobalImputationMatrix({
                                   />
                                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>h/sem</span>
                                 </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="24"
+                                    step="1"
+                                    className={styles.inputNumber}
+                                    style={{ width: '60px', fontWeight: 800, color: '#0D3A5F' }}
+                                    value={alloc.months || 12}
+                                    onChange={e => handleMonthsChange(realWorkerIdx, alloc.projectId, parseInt(e.target.value) || 12)}
+                                  />
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>meses</span>
+                                </div>
                               </div>
 
-                              {/* Quick % Pills */}
-                              <div className={styles.quickPillsRow}>
-                                <span style={{ fontSize: '0.6875rem', color: '#94A3B8', fontWeight: 700 }}>Asignar rápido:</span>
-                                {[10, 25, 33.3, 50, 75, 100].map(pVal => (
-                                  <button
-                                    key={pVal}
-                                    type="button"
-                                    onClick={() => handlePctChange(realWorkerIdx, alloc.projectId, pVal)}
-                                    className={`${styles.quickPillBtn} ${Math.abs(allocPct - pVal) < 1 ? styles.quickPillBtnActive : ''}`}
-                                  >
-                                    {pVal === 33.3 ? '1/3' : `${pVal}%`}
-                                  </button>
-                                ))}
-                                {freePct > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handlePctChange(realWorkerIdx, alloc.projectId, allocPct + freePct)}
-                                    className={styles.quickPillBtn}
-                                    style={{ background: '#EFF6FF', color: '#2563EB', borderColor: '#93C5FD' }}
-                                  >
-                                    + Todo Libre ({freePct.toFixed(0)}%)
-                                  </button>
-                                )}
+                              {/* Quick % and Months Pills */}
+                              <div className={styles.quickPillsRow} style={{ flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8', fontWeight: 700 }}>Horas:</span>
+                                  {[10, 25, 33.3, 50, 75, 100].map(pVal => (
+                                    <button
+                                      key={pVal}
+                                      type="button"
+                                      onClick={() => handlePctChange(realWorkerIdx, alloc.projectId, pVal)}
+                                      className={`${styles.quickPillBtn} ${Math.abs(allocPct - pVal) < 1 ? styles.quickPillBtnActive : ''}`}
+                                    >
+                                      {pVal === 33.3 ? '1/3' : `${pVal}%`}
+                                    </button>
+                                  ))}
+                                  {freePct > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePctChange(realWorkerIdx, alloc.projectId, allocPct + freePct)}
+                                      className={styles.quickPillBtn}
+                                      style={{ background: '#EFF6FF', color: '#2563EB', borderColor: '#93C5FD' }}
+                                    >
+                                      + Todo Libre ({freePct.toFixed(0)}%)
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8', fontWeight: 700 }}>Duración:</span>
+                                  {[3, 6, 9, 10, 12].map(mVal => (
+                                    <button
+                                      key={mVal}
+                                      type="button"
+                                      onClick={() => handleMonthsChange(realWorkerIdx, alloc.projectId, mVal)}
+                                      className={`${styles.quickPillBtn} ${(alloc.months || 12) === mVal ? styles.quickPillBtnActive : ''}`}
+                                      style={{ padding: '0.15rem 0.45rem', fontSize: '0.6875rem' }}
+                                    >
+                                      {mVal} meses
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             </div>
 
                             {/* Cost Box */}
                             <div className={styles.economicImpactBox}>
                               <div className={styles.costMonthVal}>{formatCurrency(costMonth)}/mes</div>
-                              <div className={styles.costYearSub}>{formatCurrency(costYear)} / año</div>
+                              <div className={styles.costYearSub}>{formatCurrency(costYear)} / {alloc.months || 12} meses</div>
                             </div>
 
                             {/* Delete allocation button */}
