@@ -1,8 +1,9 @@
-﻿'use server';
+'use server';
 
 import { createClient } from '@/lib/supabase/server';
 import { generateSocialProjectWithAI, AIProjectInput } from '@/lib/ai/gemini';
 import { revalidatePath } from 'next/cache';
+import { saveToolData } from '@/app/actions/tools';
 
 export async function createProjectWithAI(input: AIProjectInput) {
   const supabase = await createClient();
@@ -82,12 +83,8 @@ export async function createProjectWithAI(input: AIProjectInput) {
       }
     ];
 
-    const { error: toolsError } = await supabase
-      .from('project_tools')
-      .upsert(toolsPayloads, { onConflict: 'project_id,tool_slug' });
-
-    if (toolsError) {
-      console.error('Error al insertar las herramientas del proyecto con IA:', toolsError);
+    for (const payload of toolsPayloads) {
+      await saveToolData(payload.project_id, payload.tool_slug, payload.data);
     }
 
     revalidatePath('/dashboard');

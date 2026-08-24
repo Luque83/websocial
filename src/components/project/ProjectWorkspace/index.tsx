@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, 
   Save, 
@@ -37,13 +38,15 @@ import {
   Award,
   PlayCircle,
   ClipboardCheck,
+  FileSpreadsheet,
   X
 } from 'lucide-react';
-import { saveProjectWorkspaceAction, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
+import { saveProjectWorkspaceAction, getFullProjectWorkspaceData, type ProjectWorkspaceData } from '@/app/actions/projectWorkspace';
 import { analyzeConvocatoriaAction } from '@/app/actions/ai-analyzer';
 import { uploadProjectDocumentAction } from '@/app/actions/storage';
-import { getOrgStaffCatalogAction } from '@/app/actions/personal';
-import { DEFAULT_STAFF_CATALOG, type Worker as OrgWorker } from '@/config/staff';
+import { getOrgStaffCatalogAction, getGlobalImputationMatrixAction } from '@/app/actions/personal';
+import { GlobalImputationMatrix } from '@/app/(dashboard)/dashboard/matriz-imputacion/GlobalImputationMatrix';
+import { DEFAULT_STAFF_CATALOG, DEFAULT_CATEGORY_PROFILES, type Worker as OrgWorker, type EstimatedCategoryProfile } from '@/config/staff';
 import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
 import { GrantLifecycleNav, type LifecyclePhase } from '@/components/project/GrantLifecycleNav';
 import { TramitacionTab } from '@/components/project/tabs/TramitacionTab';
@@ -77,6 +80,7 @@ interface ProjectWorkspaceProps {
     updated_at: string;
   };
   initialToolsData: Record<string, unknown>;
+  initialStaffCatalog?: OrgWorker[];
   generalMatrix?: unknown;
 }
 
@@ -84,7 +88,10 @@ export function ProjectWorkspace({
   projectId,
   initialProject,
   initialToolsData,
+  initialStaffCatalog,
 }: ProjectWorkspaceProps) {
+  const router = useRouter();
+
   // 1. STATE INITIALIZATION - TWO-TIER LIFECYCLE NAVIGATION
   const [activePhase, setActivePhase] = useState<LifecyclePhase>('solicitud');
   const [activeSubTab, setActiveSubTab] = useState<string>('convocatoria');
@@ -143,7 +150,12 @@ export function ProjectWorkspace({
   const [auditIssues, setAuditIssues] = useState<CrossValidationIssue[]>([]);
 
   // Staff Catalog States (Importar de Plantilla de la Entidad)
-  const [staffCatalog, setStaffCatalog] = useState<OrgWorker[]>(DEFAULT_STAFF_CATALOG);
+  const [staffCatalog, setStaffCatalog] = useState<OrgWorker[]>(() => {
+    if (initialStaffCatalog && Array.isArray(initialStaffCatalog) && initialStaffCatalog.length > 0) {
+      return initialStaffCatalog;
+    }
+    return DEFAULT_STAFF_CATALOG;
+  });
   const [isImportStaffModalOpen, setIsImportStaffModalOpen] = useState(false);
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
 
@@ -173,6 +185,10 @@ export function ProjectWorkspace({
   const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const [pdfUploadedName, setPdfUploadedName] = useState<string | null>(null);
 
+  // Matrix Modal States
+  const [isMatrixModalOpen, setIsMatrixModalOpen] = useState(false);
+  const [matrixData, setMatrixData] = useState<any>(null);
+
   // Restore existing workspace data or fallback to tool-specific data
   const fullWorkspace = (initialToolsData['project-workspace-full'] as ProjectWorkspaceData) || null;
   const initialML = (initialToolsData['marco-logico'] as ProjectWorkspaceData['marcoLogico']) || null;
@@ -183,267 +199,113 @@ export function ProjectWorkspace({
 
   // 1.1 Subvención y Expediente
   const [subvencion, setSubvencion] = useState<ProjectWorkspaceData['subvencion']>(() => fullWorkspace?.subvencion || {
-    organismo: 'Consejería de Inclusión Social / IRPF Autonómico',
-    linea: 'Línea 1: Programas de Inserción Sociolaboral para Colectivos Vulnerables',
-    expedienteNum: 'EXP-2026/0491-IRPF',
-    importeSolicitado: 42000,
-    importeConcedido: 40000,
-    aportacionPropia: 5000,
-    fechaInicio: '2026-01-01',
-    fechaFin: '2026-12-31',
-    fechaLimiteJustificacion: '2027-03-31',
-    estadoSubvencion: 'ejecucion',
+    organismo: '',
+    linea: '',
+    expedienteNum: '',
+    importeSolicitado: 0,
+    importeConcedido: 0,
+    aportacionPropia: 0,
+    fechaInicio: '',
+    fechaFin: '',
+    fechaLimiteJustificacion: '',
+    estadoSubvencion: 'solicitud',
   });
 
   // 1.2 Diagnóstico
   const [diagnostico, setDiagnostico] = useState(() => fullWorkspace?.diagnostico || {
-    projectName: initialProject.name || 'Programa de Inserción Sociolaboral Juventud Activa 2026',
-    organization: 'Asociación Acción e Inclusión Social',
-    callName: 'Subvenciones del 0,7% IRPF Social 2026',
-    targetPopulation: 'Jóvenes en situación de vulnerabilidad y desempleo de larga duración',
-    beneficiariesDirect: 50,
-    beneficiariesIndirect: 150,
-    location: 'Ámbito Autonómico / Comarcal',
-    justification: initialProject.description || 'El proyecto responde a la urgente necesidad de capacitación técnica y acompañamiento individualizado para superar la brecha sociolaboral.',
-    diagnosticText: 'Se detecta un incremento del 35% en la tasa de desempleo juvenil en el territorio y falta de itinerarios personalizados adaptados al mercado digital.',
+    projectName: initialProject.name || '',
+    organization: '',
+    callName: '',
+    targetPopulation: '',
+    beneficiariesDirect: 0,
+    beneficiariesIndirect: 0,
+    location: '',
+    justification: initialProject.description || '',
+    diagnosticText: '',
   });
 
   // 1.3 Marco Lógico con Evidencias
   const [marcoLogico, setMarcoLogico] = useState<ProjectWorkspaceData['marcoLogico']>(() => fullWorkspace?.marcoLogico || initialML || {
-    fin: 'Mejorar la cohesión social y la calidad de vida de los colectivos vulnerables.',
-    proposito: 'Fomentar la empleabilidad y la inclusión social activa de las personas participantes.',
-    objectives: [
-      {
-        id: 'obj-1',
-        description: 'Desarrollar itinerarios integrados de orientación y capacitación laboral.',
-        indicators: '80% de participantes completan su itinerario formativo (50 personas)',
-        sources: 'Partes de asistencia y certificados de aprovechamiento',
-        assumptions: 'Compromiso de asistencia y disponibilidad de aulas formativas',
-        results: [
-          {
-            id: 'res-1-1',
-            description: '50 personas han recibido orientación laboral individualizada.',
-            indicators: '50 diagnósticos de empleabilidad realizados',
-            sources: 'Fichas de seguimiento técnico',
-            assumptions: 'Derivación adecuada de servicios sociales de referencia',
-            activities: [
-              { 
-                id: 'act-1-1-1', 
-                description: 'Entrevistas de diagnóstico inicial y diseño del plan de acción', 
-                responsible: 'Trabajador/a Social',
-                evidencias: [
-                  { id: 'ev-1', tipo: 'firmas', descripcion: 'Fichas de acogida y consentimiento firmadas', estado: 'aportada', archivoNombre: 'fichas_acogida_firmadas.pdf' },
-                  { id: 'ev-2', tipo: 'informe', descripcion: 'Informe de valoración diagnóstica individual', estado: 'validada', archivoNombre: 'informe_diagnostico_inicial.pdf' }
-                ]
-              },
-              { 
-                id: 'act-1-1-2', 
-                description: 'Talleres grupales de competencias digitales y búsqueda activa de empleo', 
-                responsible: 'Educador/a Social',
-                evidencias: [
-                  { id: 'ev-3', tipo: 'firmas', descripcion: 'Listados de asistencia diarios con DNI y firma', estado: 'aportada', archivoNombre: 'hojas_firmas_talleres_m1_m3.pdf' },
-                  { id: 'ev-4', tipo: 'fotos', descripcion: 'Dossier fotográfico y capturas de sesiones', estado: 'pendiente' }
-                ]
-              },
-            ]
-          }
-        ]
-      }
-    ]
+    fin: '',
+    proposito: '',
+    objectives: [],
   });
 
   // 1.4 Indicadores
-  const [indicadores, setIndicadores] = useState<ProjectWorkspaceData['indicadores']>(() => fullWorkspace?.indicadores || initialInd?.indicadores || [
-    { id: 'ind-1', name: 'Personas atendidas con itinerario completo', unit: 'personas', baseline: 0, target: 50, current: 38, source: 'Fichas de acogida y registro técnico' },
-    { id: 'ind-2', name: 'Inserciones laborales logradas', unit: 'contratos', baseline: 0, target: 20, current: 14, source: 'Contratos laborales y altas en SS' },
-    { id: 'ind-3', name: 'Talleres formativos ejecutados', unit: 'talleres', baseline: 0, target: 4, current: 3, source: 'Memoria pedagógica y hojas de firmas' },
-  ]);
+  const [indicadores, setIndicadores] = useState<ProjectWorkspaceData['indicadores']>(() => fullWorkspace?.indicadores || initialInd?.indicadores || []);
 
-  // 1.5 Personal
+  // 1.4.1 Categorías Profesionales Estimadas (Fase de Solicitud - Sin Nombres Nominales)
+  const [personalEstimado, setPersonalEstimado] = useState<EstimatedCategoryProfile[]>(() => {
+    if (fullWorkspace?.personalEstimado && Array.isArray(fullWorkspace.personalEstimado) && fullWorkspace.personalEstimado.length > 0) {
+      return fullWorkspace.personalEstimado;
+    }
+    return [];
+  });
+
+  // 1.5 Personal Reformulado / Concedido (Nominal con Nombres)
   const [personal, setPersonal] = useState<ProjectWorkspaceData['personal']>(() => {
-    if (fullWorkspace?.personal && Array.isArray(fullWorkspace.personal) && fullWorkspace.personal.length > 0) {
+    if (fullWorkspace?.personal && Array.isArray(fullWorkspace.personal)) {
       return fullWorkspace.personal;
     }
-    if (initialPers?.workers && Array.isArray(initialPers.workers) && initialPers.workers.length > 0) {
+    if (initialPers?.workers && Array.isArray(initialPers.workers)) {
       return initialPers.workers;
     }
     // Verificar si el catálogo central tiene asignaciones previas para este proyecto
-    if (Array.isArray(staffCatalog) && staffCatalog.length > 0) {
-      const assignedFromCatalog = staffCatalog
-        .filter(w => (w.allocations || []).some(a => a.projectId === projectId && a.weeklyHours > 0))
-        .map(w => {
-          const alloc = (w.allocations || []).find(a => a.projectId === projectId)!;
-          return {
-            id: `pers-${w.id}`,
-            workerId: w.id,
-            name: w.name,
-            role: w.role,
-            contractType: w.contractType || 'Indefinido',
-            monthlySalary: w.salaryMonthly,
-            ssPct: w.ssPct || 31.4,
-            weeklyHours: alloc.weeklyHours,
-            maxWeeklyHours: w.maxWeeklyHours || 37.5,
-            months: alloc.months || 12,
-          };
-        });
-      if (assignedFromCatalog.length > 0) {
-        return assignedFromCatalog;
-      }
+    const catalogSource = (initialStaffCatalog && initialStaffCatalog.length > 0) ? initialStaffCatalog : DEFAULT_STAFF_CATALOG;
+    const assignedFromCatalog = catalogSource
+      .filter(w => (w.allocations || []).some(a => a.projectId === projectId && a.weeklyHours > 0))
+      .map(w => {
+        const alloc = (w.allocations || []).find(a => a.projectId === projectId)!;
+        return {
+          id: `pers-${w.id}`,
+          workerId: w.id,
+          name: w.name,
+          role: w.role,
+          contractType: w.contractType || 'Indefinido',
+          monthlySalary: w.salaryMonthly,
+          ssPct: w.ssPct || 31.4,
+          weeklyHours: alloc.weeklyHours,
+          maxWeeklyHours: w.maxWeeklyHours || 37.5,
+          months: alloc.months || 12,
+        };
+      });
+    if (assignedFromCatalog.length > 0) {
+      return assignedFromCatalog;
     }
-    return [
-      {
-        id: 'pers-1',
-        workerId: 'w-1',
-        name: 'Elena Gómez',
-        role: 'Trabajadora Social / Coordinadora',
-        contractType: 'Indefinido',
-        monthlySalary: 2100,
-        ssPct: 31.4,
-        weeklyHours: 20,
-        maxWeeklyHours: 37.5,
-        months: 12,
-      },
-      {
-        id: 'pers-2',
-        workerId: 'w-2',
-        name: 'Carlos Ruiz',
-        role: 'Educador Social',
-        contractType: 'Temporal',
-        monthlySalary: 1850,
-        ssPct: 31.4,
-        weeklyHours: 18.75,
-        maxWeeklyHours: 37.5,
-        months: 10,
-      }
-    ];
+    return [];
   });
 
   // 1.5.1 Nóminas Mensuales Detalladas (Ejecución Real)
   const [activePersonalSubTab, setActivePersonalSubTab] = useState<'prevision' | 'nominas_mensuales'>('prevision');
-  const [nominasMensuales, setNominasMensuales] = useState<NonNullable<ProjectWorkspaceData['nominasMensuales']>>(() => fullWorkspace?.nominasMensuales || [
-    {
-      id: 'nom-1',
-      workerId: 'pers-1',
-      workerName: 'Elena Gómez',
-      role: 'Trabajadora Social / Coordinadora',
-      periodoMes: '2026-01',
-      salarioBruto: 2100,
-      ssPatronal: 659.40,
-      costeEmpresaTotal: 2759.40,
-      pctImputado: 53.33,
-      importeImputado: 1471.68,
-      justificantePago: true,
-      reciboNominaName: 'nomina_enero_2026_elena.pdf',
-      justificantePagoName: 'transferencia_sueldo_enero_elena.pdf',
-      rlcDocName: 'rlc_enero_2026_tgss.pdf',
-    },
-    {
-      id: 'nom-2',
-      workerId: 'pers-1',
-      workerName: 'Elena Gómez',
-      role: 'Trabajadora Social / Coordinadora',
-      periodoMes: '2026-02',
-      salarioBruto: 2100,
-      ssPatronal: 659.40,
-      costeEmpresaTotal: 2759.40,
-      pctImputado: 53.33,
-      importeImputado: 1471.68,
-      justificantePago: true,
-      reciboNominaName: 'nomina_febrero_2026_elena.pdf',
-      justificantePagoName: 'transferencia_sueldo_febrero_elena.pdf',
-      rlcDocName: 'rlc_febrero_2026_tgss.pdf',
-    },
-    {
-      id: 'nom-3',
-      workerId: 'pers-2',
-      workerName: 'Carlos Ruiz',
-      role: 'Educador Social',
-      periodoMes: '2026-01',
-      salarioBruto: 1850,
-      ssPatronal: 580.90,
-      costeEmpresaTotal: 2430.90,
-      pctImputado: 50.00,
-      importeImputado: 1215.45,
-      justificantePago: true,
-      reciboNominaName: 'nomina_enero_2026_carlos.pdf',
-      justificantePagoName: 'transferencia_sueldo_enero_carlos.pdf',
-      rlcDocName: 'rlc_enero_2026_tgss.pdf',
-    }
-  ]);
+  const [nominasMensuales, setNominasMensuales] = useState<NonNullable<ProjectWorkspaceData['nominasMensuales']>>(() => fullWorkspace?.nominasMensuales || []);
 
   // 1.6 Presupuesto
   const [presupuesto, setPresupuesto] = useState<ProjectWorkspaceData['presupuesto']>(() => fullWorkspace?.presupuesto || initialCostes || {
-    partidas: [
-      { id: 'p-1', category: 'personal', description: 'Elena Gómez (Trabajadora Social - 20h/sem)', monthlyAmount: 1471.68, months: 12, costeReal: 17660.16, workerId: 'pers-1' },
-      { id: 'p-2', category: 'personal', description: 'Carlos Ruiz (Educador Social - 18.75h/sem)', monthlyAmount: 1215.45, months: 10, costeReal: 12154.50, workerId: 'pers-2' },
-      { id: 'p-3', category: 'actividades', description: 'Material didáctico y licencias formativas', monthlyAmount: 250, months: 10, costeReal: 2400 },
-      { id: 'p-4', category: 'suministros', description: 'Alquiler de aulas y suministros de sede', monthlyAmount: 400, months: 12, costeReal: 4800 },
-    ],
-    indirectPct: 8,
-    grantAmount: 40000,
+    partidas: [],
+    indirectPct: 0,
+    grantAmount: 0,
   });
 
   // 1.7 Gastos y Facturas Detalladas con Archivos
-  const [gastosFacturas, setGastosFacturas] = useState<ProjectWorkspaceData['gastosFacturas']>(() => fullWorkspace?.gastosFacturas || [
-    {
-      id: 'fac-1',
-      proveedor: 'Formación y Tecnología S.L.',
-      nif: 'B-98765432',
-      numFactura: 'FAC-2026/089',
-      fecha: '2026-03-15',
-      concepto: 'Licencias de software didáctico y aula virtual',
-      totalFactura: 1452.00,
-      pctImputado: 100,
-      importeImputado: 1452.00,
-      partidaId: 'p-3',
-      justificantePago: true,
-      facturaFileName: 'factura_089_formacion.pdf',
-      justificanteFileName: 'justificante_banco_089.pdf'
-    },
-    {
-      id: 'fac-2',
-      proveedor: 'Espacio Coworking & Aulas Centro',
-      nif: 'B-12345678',
-      numFactura: '2026-0312',
-      fecha: '2026-04-02',
-      concepto: 'Alquiler de sala para talleres presenciales (Trimestre 1)',
-      totalFactura: 1200.00,
-      pctImputado: 80,
-      importeImputado: 960.00,
-      partidaId: 'p-4',
-      justificantePago: true,
-      facturaFileName: 'factura_alquiler_aulas_t1.pdf',
-      justificanteFileName: 'transferencia_alquiler_t1.pdf'
-    },
-    {
-      id: 'fac-3',
-      proveedor: 'Papelería y Suministros Gráficos',
-      nif: 'A-44332211',
-      numFactura: 'A-994',
-      fecha: '2026-05-10',
-      concepto: 'Material fungible para participantes',
-      totalFactura: 350.00,
-      pctImputado: 100,
-      importeImputado: 350.00,
-      partidaId: 'p-3',
-      justificantePago: false,
-      facturaFileName: 'factura_papeleria_994.pdf'
-    }
-  ]);
+  const [gastosFacturas, setGastosFacturas] = useState<ProjectWorkspaceData['gastosFacturas']>(() => fullWorkspace?.gastosFacturas || []);
 
   // 1.8 Cronograma
   const [cronograma, setCronograma] = useState<ProjectWorkspaceData['cronograma']>(() => fullWorkspace?.cronograma || initialCron || {
     durationMonths: 12,
-    activities: [
-      { id: 'c-1', description: 'Entrevistas de diagnóstico inicial y diseño del plan de acción', responsible: 'Trabajador/a Social', startMonth: 1, endMonth: 4 },
-      { id: 'c-2', description: 'Talleres grupales de competencias digitales y búsqueda activa', responsible: 'Educador/a Social', startMonth: 3, endMonth: 10 },
-      { id: 'c-3', description: 'Seguimiento, evaluación intermedia y prospección de empleo', responsible: 'Coordinación', startMonth: 4, endMonth: 11 },
-      { id: 'c-4', description: 'Evaluación final y redacción de memoria justificativa', responsible: 'Equipo Técnico', startMonth: 11, endMonth: 12 },
-    ]
+    activities: []
   });
 
   const handleModify = () => {
     setHasChanges(true);
+  };
+
+  const handleOpenMatrixModal = async () => {
+    const success = await handleSaveAll(); // First save any project changes
+    if (!success) return; // Don't open if save failed to prevent data loss
+    
+    const data = await getGlobalImputationMatrixAction();
+    setMatrixData(data);
+    setIsMatrixModalOpen(true);
   };
 
   // 2. FINANCIAL CALCULATIONS
@@ -636,6 +498,32 @@ export function ProjectWorkspace({
   };
 
   // 5. ACTIONS: Auto-sincronización bidireccional Personal <-> Presupuesto
+  const updatePersonalEstimadoAndBudget = (newCategories: EstimatedCategoryProfile[]) => {
+    setPersonalEstimado(newCategories);
+    const newCategoryPartidas = newCategories.map(cat => {
+      const costeEmpresaMes = cat.monthlySalary * (1 + (cat.ssPct || 31.4) / 100);
+      const maxH = cat.maxWeeklyHours || 37.5;
+      const pct = maxH > 0 ? (cat.weeklyHours / maxH) : 1;
+      const costeMesImputado = Number((costeEmpresaMes * pct).toFixed(2));
+      const totalCoste = Number((costeMesImputado * (cat.months || 12)).toFixed(2));
+      return {
+        id: `p-${cat.id}`,
+        category: 'personal',
+        description: `Personal: ${cat.role} (${cat.weeklyHours}h/sem · ${cat.category})`,
+        monthlyAmount: costeMesImputado,
+        months: cat.months || 12,
+        costeReal: totalCoste,
+      };
+    });
+
+    const otherPartidas = presupuesto.partidas.filter(p => p.category !== 'personal');
+    setPresupuesto(prev => ({
+      ...prev,
+      partidas: [...newCategoryPartidas, ...otherPartidas]
+    }));
+    handleModify();
+  };
+
   const updatePersonalAndBudget = (newPersonal: ProjectWorkspaceData['personal']) => {
     setPersonal(newPersonal);
     const newPersonalPartidas = newPersonal.map(worker => {
@@ -647,7 +535,7 @@ export function ProjectWorkspace({
       return {
         id: `p-${worker.id}`,
         category: 'personal',
-        description: `${worker.name || 'Técnico'} (${worker.role} - ${worker.weeklyHours}h/sem)`,
+        description: `${worker.name || 'Técnico/a'} (${worker.role} - ${worker.weeklyHours}h/sem)`,
         monthlyAmount: costeMesImputado,
         months: worker.months || 12,
         costeReal: totalCoste,
@@ -751,7 +639,7 @@ export function ProjectWorkspace({
     }
   };
 
-  const handleSaveAll = async () => {
+  const handleSaveAll = async (): Promise<boolean> => {
     setIsSaving(true);
     try {
       const fullData: ProjectWorkspaceData = {
@@ -759,6 +647,7 @@ export function ProjectWorkspace({
         subvencion,
         marcoLogico,
         indicadores,
+        personalEstimado,
         personal,
         presupuesto,
         gastosFacturas,
@@ -771,10 +660,13 @@ export function ProjectWorkspace({
       if (result.success) {
         setLastSaved(new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         setHasChanges(false);
+        return true;
       }
+      return false;
     } catch (err) {
       console.error('Error al guardar el expediente del proyecto:', err);
-      alert('Error al guardar los datos del proyecto. Por favor, revisa tu conexión.');
+      alert('Error al guardar los datos del proyecto. Por favor, revisa tu conexión o contacta a soporte.');
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -875,6 +767,7 @@ export function ProjectWorkspace({
       subvencion,
       marcoLogico,
       indicadores,
+      personalEstimado,
       personal,
       presupuesto,
       gastosFacturas,
@@ -986,8 +879,8 @@ export function ProjectWorkspace({
               className={`${styles.tabBtn} ${activeSubTab === 'personal' ? styles.tabActive : ''}`}
             >
               <Users size={15} />
-              <span>1.4 Plantilla & Personal Estimado</span>
-              <span className={styles.tabBadge}>{personal.length}</span>
+              <span>1.4 Plantilla & Categorías Estimadas</span>
+              <span className={styles.tabBadge}>{personalEstimado.length}</span>
             </button>
             <button
               type="button"
@@ -995,7 +888,7 @@ export function ProjectWorkspace({
               className={`${styles.tabBtn} ${activeSubTab === 'presupuesto' ? styles.tabActive : ''}`}
             >
               <Calculator size={15} />
-              <span>1.5 Presupuesto & Cofinanciación</span>
+              <span>1.5 Presupuesto Solicitado & Cofinanciación</span>
               <span className={styles.tabBadge}>{formatCurrency(totalPresupuesto)}</span>
             </button>
             <button
@@ -1071,20 +964,11 @@ export function ProjectWorkspace({
             </button>
             <button
               type="button"
-              onClick={() => setActiveSubTab('reform_personal')}
-              className={`${styles.tabBtn} ${activeSubTab === 'reform_personal' ? styles.tabActive : ''}`}
-            >
-              <Users size={15} />
-              <span>3.4 Personal & Dedicación</span>
-              <span className={styles.tabBadge}>{personal.length}</span>
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveSubTab('reform_presupuesto')}
-              className={`${styles.tabBtn} ${activeSubTab === 'reform_presupuesto' ? styles.tabActive : ''}`}
+              className={`${styles.tabBtn} ${activeSubTab === 'reform_presupuesto' || activeSubTab === 'reform_personal' ? styles.tabActive : ''}`}
             >
               <Calculator size={15} />
-              <span>3.5 Presupuesto Reformulado</span>
+              <span>3.4 Personal y Presupuesto Reformulado</span>
               <span className={styles.tabBadge}>{formatCurrency(totalPresupuesto)}</span>
             </button>
             <button
@@ -1093,7 +977,7 @@ export function ProjectWorkspace({
               className={`${styles.tabBtn} ${activeSubTab === 'reform_cronograma' ? styles.tabActive : ''}`}
             >
               <Calendar size={15} />
-              <span>3.6 Cronograma Reformulado</span>
+              <span>3.5 Cronograma Reformulado</span>
             </button>
             <button
               type="button"
@@ -1101,7 +985,7 @@ export function ProjectWorkspace({
               className={`${styles.tabBtn} ${activeSubTab === 'reform_baseline' ? styles.tabActive : ''}`}
             >
               <Award size={15} />
-              <span>3.7 Fijar Baseline Autorizada (V2)</span>
+              <span>3.6 Fijar Baseline Autorizada (V2)</span>
               <span className={styles.tabBadge}>{versions.filter(v => v.versionType === 'baseline_autorizada').length}</span>
             </button>
           </>
@@ -1743,552 +1627,215 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.4 / 3.4: PERSONAL Y PLANTILLA */}
-      {((activePhase === 'solicitud' && activeSubTab === 'personal') || 
-        (activePhase === 'reformulacion' && activeSubTab === 'reform_personal')) && (
+      {/* 1.4: PLANTILLA & CATEGORÍAS PROFESIONALES ESTIMADAS (FASE DE SOLICITUD) */}
+      {activePhase === 'solicitud' && activeSubTab === 'personal' && (
         <div className={styles.contentCard}>
-          {activePhase === 'reformulacion' && (
-            <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <Sliders size={20} color="#2563EB" />
-              <div>
-                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación de Personal y Dedicación (V2) · 🔗 Conexión Continua 3.4 ↔ 3.5 ↔ Matriz</strong>
-                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
-                  Ajusta las horas semanales o los meses de imputación de los trabajadores a la subvención. <strong>Cualquier cambio se traslada automáticamente al Presupuesto 3.5 y a la Matriz de Imputación Multiproyecto</strong>.
-                </p>
-              </div>
+          <div style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <Info size={24} color="#16A34A" />
+            <div>
+              <strong style={{ color: '#14532D', fontSize: '0.9375rem' }}>ℹ️ Fase de Solicitud Oficial: Solo Categorías Profesionales y Perfiles Técnicos</strong>
+              <p style={{ fontSize: '0.75rem', color: '#15803D', margin: '0.2rem 0 0 0' }}>
+                Conforme a la normativa y bases reguladoras de subvenciones, en la fase de solicitud únicamente se especifican las <strong>categorías profesionales y perfiles técnicos estimados</strong> (p. ej. Trabajador/a Social, Psicólogo/a, Educador/a Social, Administrativo/a, etc.) con sus costes salariales previstos por convenio, <strong>sin indicar nombres de personas físicas</strong>. La asignación nominal se realiza en la reformulación (3.4).
+              </p>
             </div>
-          )}
-          <datalist id="staff-catalog-datalist">
-            {staffCatalog.map(w => (
-              <option key={w.id} value={w.name}>
-                {w.role} - Bruto: {w.salaryMonthly} €/mes
-              </option>
-            ))}
-          </datalist>
+          </div>
 
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Users size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.4 Reformulación de Plantilla y Dedicación' : '4. Personal, Plantilla y Nóminas Mensuales'}</h2>
-              <p className={styles.sectionSubtitle}>Gestiona la previsión de plantilla asignada y registra los gastos de nóminas mes a mes con sus justificantes de pago bancario y Seguridad Social.</p>
+              <h2 className={styles.sectionTitle}><Users size={20} color="#2563eb" /> 1.4 Previsión de Plantilla y Categorías Profesionales Estimadas</h2>
+              <p className={styles.sectionSubtitle}>Define los perfiles laborales necesarios para el proyecto con sus costes estimados de salario y Seguridad Social.</p>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedStaffIds(staffCatalog.map(w => w.id));
-                  setIsImportStaffModalOpen(true);
-                }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  background: '#0D3A5F',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '8px',
-                  fontSize: '0.8125rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(13, 58, 95, 0.25)'
-                }}
-              >
-                <Users size={16} color="#16C7B2" /> 👥 Importar de la Plantilla ({staffCatalog.length})
-              </button>
-              <button
-                type="button"
-                onClick={syncPersonalToBudget}
+                onClick={() => updatePersonalEstimadoAndBudget(personalEstimado)}
                 className={styles.exportBtn}
               >
-                🔄 Trasladar al Presupuesto
+                🔄 Trasladar al Presupuesto Solicitado (1.5)
               </button>
             </div>
           </div>
 
-          {/* Sub-tabs selector for Personal */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '2px solid #E2E8F0', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setActivePersonalSubTab('prevision')}
-              style={{
-                padding: '0.45rem 1rem',
-                borderRadius: '8px',
-                border: 'none',
-                background: activePersonalSubTab === 'prevision' ? '#0D3A5F' : '#EAF5FB',
-                color: activePersonalSubTab === 'prevision' ? '#ffffff' : '#0D3A5F',
-                fontWeight: 800,
-                fontSize: '0.8125rem',
-                cursor: 'pointer'
-              }}
-            >
-              👥 4A. Previsión Anual y Plantilla Asignada ({personal.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActivePersonalSubTab('nominas_mensuales')}
-              style={{
-                padding: '0.45rem 1rem',
-                borderRadius: '8px',
-                border: 'none',
-                background: activePersonalSubTab === 'nominas_mensuales' ? '#0D3A5F' : '#EAF5FB',
-                color: activePersonalSubTab === 'nominas_mensuales' ? '#ffffff' : '#0D3A5F',
-                fontWeight: 800,
-                fontSize: '0.8125rem',
-                cursor: 'pointer'
-              }}
-            >
-              📑 4B. Registro Mensual de Nóminas Ejecutadas ({nominasMensuales.length})
-            </button>
+          {/* Quick presets buttons */}
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#0D3A5F' }}>
+              ⚡ Añadir Perfil Tipo de Convenio:
+            </span>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {DEFAULT_CATEGORY_PROFILES.map(cp => (
+                <button
+                  key={cp.id}
+                  type="button"
+                  onClick={() => {
+                    const newId = `cat-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+                    const updated = [...personalEstimado, { ...cp, id: newId }];
+                    updatePersonalEstimadoAndBudget(updated);
+                  }}
+                  className={styles.btnSecondary}
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.65rem' }}
+                >
+                  + {cp.role} ({cp.weeklyHours}h/sem)
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* 4A: PREVISIÓN ANUAL */}
-          {activePersonalSubTab === 'prevision' && (
-            <div>
-              <div className={styles.tableWrapper}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={{ minWidth: '220px' }}>Nombre del Trabajador/a</th>
-                      <th>Categoría / Puesto</th>
-                      <th>Bruto / Mes (€)</th>
-                      <th>SS Patronal (%)</th>
-                      <th>Horas/sem</th>
-                      <th>Meses</th>
-                      <th className={styles.numCol}>Coste Imputado / Mes</th>
-                      <th className={styles.numCol}>Total Imputado</th>
-                      <th></th>
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th style={{ minWidth: '200px' }}>Puesto / Rol Técnico Estimado</th>
+                  <th style={{ minWidth: '180px' }}>Categoría / Grupo Cotización</th>
+                  <th>Salario Bruto / Mes (€)</th>
+                  <th>SS Patronal (%)</th>
+                  <th>Horas/sem</th>
+                  <th>Meses</th>
+                  <th className={styles.numCol}>Coste Imputado / Mes</th>
+                  <th className={styles.numCol}>Total Solicitado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {personalEstimado.map((cat, idx) => {
+                  const costeEmpresaMes = cat.monthlySalary * (1 + (cat.ssPct || 31.4) / 100);
+                  const maxH = cat.maxWeeklyHours || 37.5;
+                  const pct = maxH > 0 ? (cat.weeklyHours / maxH) : 1;
+                  const costeMesImputado = Number((costeEmpresaMes * pct).toFixed(2));
+                  const costeTotal = Number((costeMesImputado * (cat.months || 12)).toFixed(2));
+
+                  return (
+                    <tr key={cat.id}>
+                      <td>
+                        <input
+                          type="text"
+                          className={styles.input}
+                          placeholder="Ej. Trabajador/a Social"
+                          value={cat.role}
+                          onChange={e => {
+                            const newCats = [...personalEstimado];
+                            newCats[idx].role = e.target.value;
+                            updatePersonalEstimadoAndBudget(newCats);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className={styles.input}
+                          placeholder="Ej. Titulado/a Superior (Grupo 1)"
+                          value={cat.category}
+                          onChange={e => {
+                            const newCats = [...personalEstimado];
+                            newCats[idx].category = e.target.value;
+                            updatePersonalEstimadoAndBudget(newCats);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          className={styles.input}
+                          style={{ width: '90px' }}
+                          value={cat.monthlySalary}
+                          onChange={e => {
+                            const newCats = [...personalEstimado];
+                            newCats[idx].monthlySalary = parseFloat(e.target.value) || 0;
+                            updatePersonalEstimadoAndBudget(newCats);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className={styles.input}
+                          style={{ width: '75px' }}
+                          value={cat.ssPct}
+                          onChange={e => {
+                            const newCats = [...personalEstimado];
+                            newCats[idx].ssPct = parseFloat(e.target.value) || 0;
+                            updatePersonalEstimadoAndBudget(newCats);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            style={{ width: '75px' }}
+                            value={cat.weeklyHours}
+                            onChange={e => {
+                              const newCats = [...personalEstimado];
+                              newCats[idx].weeklyHours = parseFloat(e.target.value) || 0;
+                              updatePersonalEstimadoAndBudget(newCats);
+                            }}
+                          />
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>
+                            ({maxH > 0 ? ((cat.weeklyHours / maxH) * 100).toFixed(0) : 0}%)
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          className={styles.input}
+                          style={{ width: '65px' }}
+                          value={cat.months}
+                          onChange={e => {
+                            const newCats = [...personalEstimado];
+                            newCats[idx].months = parseInt(e.target.value) || 0;
+                            updatePersonalEstimadoAndBudget(newCats);
+                          }}
+                        />
+                      </td>
+                      <td className={styles.numCol}>
+                        <strong>{formatCurrency(costeMesImputado)}</strong>
+                      </td>
+                      <td className={styles.numCol} style={{ color: '#1e3a8a', fontWeight: 800 }}>
+                        {formatCurrency(costeTotal)}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updatePersonalEstimadoAndBudget(personalEstimado.filter(c => c.id !== cat.id));
+                          }}
+                          className={styles.deleteIconBtn}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {personal.map((worker, idx) => {
-                      const costeEmpresaMes = worker.monthlySalary * (1 + worker.ssPct / 100);
-                      const pct = worker.maxWeeklyHours > 0 ? (worker.weeklyHours / worker.maxWeeklyHours) : 1;
-                      const costeMesImputado = costeEmpresaMes * pct;
-                      const costeTotal = costeMesImputado * (worker.months || 12);
-                      const isOverLimit = worker.weeklyHours > worker.maxWeeklyHours;
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-                      return (
-                        <tr key={worker.id} style={{ background: isOverLimit ? '#fef2f2' : 'inherit' }}>
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                              <input
-                                type="text"
-                                list="staff-catalog-datalist"
-                                className={styles.input}
-                                placeholder="Nombre o busca en plantilla..."
-                                value={worker.name}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  const matched = staffCatalog.find(w => w.name.toLowerCase() === val.toLowerCase());
-                                  const newP = [...personal];
-                                  if (matched) {
-                                    newP[idx] = {
-                                      ...newP[idx],
-                                      name: matched.name,
-                                      role: matched.role || newP[idx].role,
-                                      monthlySalary: matched.salaryMonthly || newP[idx].monthlySalary,
-                                      ssPct: matched.ssPct || newP[idx].ssPct,
-                                      maxWeeklyHours: matched.maxWeeklyHours || newP[idx].maxWeeklyHours,
-                                    };
-                                  } else {
-                                    newP[idx].name = val;
-                                  }
-                                  updatePersonalAndBudget(newP);
-                                }}
-                              />
-                              <select
-                                style={{
-                                  fontSize: '0.75rem',
-                                  padding: '0.25rem 0.5rem',
-                                  borderRadius: '6px',
-                                  border: '1.5px solid #D5ECF8',
-                                  background: '#EAF5FB',
-                                  color: '#0D3A5F',
-                                  fontWeight: 700,
-                                  cursor: 'pointer'
-                                }}
-                                value=""
-                                onChange={e => {
-                                  const found = staffCatalog.find(w => w.id === e.target.value);
-                                  if (found) {
-                                    const newP = [...personal];
-                                    newP[idx] = {
-                                      ...newP[idx],
-                                      name: found.name,
-                                      role: found.role,
-                                      monthlySalary: found.salaryMonthly,
-                                      ssPct: found.ssPct || 31.4,
-                                      maxWeeklyHours: found.maxWeeklyHours || 37.5,
-                                    };
-                                    updatePersonalAndBudget(newP);
-                                  }
-                                }}
-                              >
-                                <option value="">⚡ Cargar datos de plantilla...</option>
-                                {staffCatalog.map(w => (
-                                  <option key={w.id} value={w.id}>
-                                    {w.name} · {w.role} ({w.salaryMonthly} €/m)
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </td>
-                          <td>
-                            <input
-                              type="text"
-                              className={styles.input}
-                              value={worker.role}
-                              onChange={e => {
-                                const newP = [...personal];
-                                newP[idx].role = e.target.value;
-                                updatePersonalAndBudget(newP);
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              className={styles.input}
-                              style={{ width: '90px' }}
-                              value={worker.monthlySalary}
-                              onChange={e => {
-                                const newP = [...personal];
-                                newP[idx].monthlySalary = parseFloat(e.target.value) || 0;
-                                updatePersonalAndBudget(newP);
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              step="0.1"
-                              className={styles.input}
-                              style={{ width: '75px' }}
-                              value={worker.ssPct}
-                              onChange={e => {
-                                const newP = [...personal];
-                                newP[idx].ssPct = parseFloat(e.target.value) || 0;
-                                updatePersonalAndBudget(newP);
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              className={styles.input}
-                              style={{ width: '75px', borderColor: isOverLimit ? '#dc2626' : 'inherit' }}
-                              value={worker.weeklyHours}
-                              onChange={e => {
-                                const newP = [...personal];
-                                newP[idx].weeklyHours = parseFloat(e.target.value) || 0;
-                                updatePersonalAndBudget(newP);
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              className={styles.input}
-                              style={{ width: '65px' }}
-                              value={worker.months}
-                              onChange={e => {
-                                const newP = [...personal];
-                                newP[idx].months = parseInt(e.target.value) || 0;
-                                updatePersonalAndBudget(newP);
-                              }}
-                            />
-                          </td>
-                          <td className={styles.numCol}>
-                            <strong>{formatCurrency(costeMesImputado)}</strong>
-                          </td>
-                          <td className={styles.numCol} style={{ color: '#1e3a8a', fontWeight: 800 }}>
-                            {formatCurrency(costeTotal)}
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updatePersonalAndBudget(personal.filter(p => p.id !== worker.id));
-                              }}
-                              className={styles.deleteIconBtn}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    updatePersonalAndBudget([
-                      ...personal,
-                      {
-                        id: `pers-${Date.now()}`,
-                        name: '',
-                        role: 'Técnico de Proyecto',
-                        contractType: 'Temporal',
-                        monthlySalary: 1800,
-                        ssPct: 31.4,
-                        weeklyHours: 37.5,
-                        maxWeeklyHours: 37.5,
-                        months: 12,
-                      }
-                    ]);
-                    handleModify();
-                  }}
-                  className={styles.addSmallBtn}
-                >
-                  <Plus size={16} /> Añadir Fila Manual
-                </button>
-
-                <button
-                  type="button"
-                  onClick={generateMonthlyPayrollsFromStaff}
-                  style={{
-                    background: '#0D3A5F',
-                    color: 'white',
-                    border: 'none',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '8px',
-                    fontSize: '0.8125rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.4rem'
-                  }}
-                >
-                  ⚡ Generar las Nóminas Mensuales desde la Plantilla ({personal.length} trabajadores)
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 4B: REGISTRO MENSUAL DE NÓMINAS */}
-          {activePersonalSubTab === 'nominas_mensuales' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <span style={{ fontSize: '0.875rem', color: '#475569', fontWeight: 600 }}>
-                  Registro mensual de nóminas reales, cálculo de coste empresa y archivo de justificantes SEPA y Seguros Sociales.
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const firstW = personal[0];
-                    setNominasMensuales([
-                      ...nominasMensuales,
-                      {
-                        id: `nom-${Date.now()}`,
-                        workerId: firstW?.id,
-                        workerName: firstW?.name || 'Trabajador/a',
-                        role: firstW?.role || 'Técnico/a',
-                        periodoMes: '2026-01',
-                        salarioBruto: firstW?.monthlySalary || 1800,
-                        ssPatronal: Number(((firstW?.monthlySalary || 1800) * 0.314).toFixed(2)),
-                        costeEmpresaTotal: Number(((firstW?.monthlySalary || 1800) * 1.314).toFixed(2)),
-                        pctImputado: 50,
-                        importeImputado: Number((((firstW?.monthlySalary || 1800) * 1.314) * 0.5).toFixed(2)),
-                        justificantePago: false,
-                      }
-                    ]);
-                    handleModify();
-                  }}
-                  className={styles.addSmallBtn}
-                >
-                  <Plus size={14} /> Registrar Nómina Manual
-                </button>
-              </div>
-
-              <div className={styles.tableWrapper}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Trabajador/a</th>
-                      <th>Mes</th>
-                      <th className={styles.numCol}>Bruto (€)</th>
-                      <th className={styles.numCol}>SS Patronal (€)</th>
-                      <th className={styles.numCol}>Coste Empresa</th>
-                      <th className={styles.numCol}>% Imp.</th>
-                      <th className={styles.numCol}>Imputado Subvención</th>
-                      <th>Documentación y Comprobantes</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {nominasMensuales.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#64748B' }}>
-                          No hay nóminas mensuales registradas. Pulsa en <em>"Generar las Nóminas Mensuales desde la Plantilla"</em> para precargar los 12 meses.
-                        </td>
-                      </tr>
-                    ) : (
-                      nominasMensuales.map((nom, nIdx) => (
-                        <tr key={nom.id}>
-                          <td>
-                            <strong>{nom.workerName}</strong>
-                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{nom.role}</div>
-                          </td>
-                          <td>
-                            <input
-                              type="month"
-                              className={styles.input}
-                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem', width: '130px' }}
-                              value={nom.periodoMes}
-                              onChange={e => {
-                                const updated = [...nominasMensuales];
-                                updated[nIdx].periodoMes = e.target.value;
-                                setNominasMensuales(updated);
-                                handleModify();
-                              }}
-                            />
-                          </td>
-                          <td className={styles.numCol}>
-                            <input
-                              type="number"
-                              className={styles.input}
-                              style={{ width: '80px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
-                              value={nom.salarioBruto}
-                              onChange={e => {
-                                const bruto = parseFloat(e.target.value) || 0;
-                                const updated = [...nominasMensuales];
-                                updated[nIdx].salarioBruto = bruto;
-                                updated[nIdx].costeEmpresaTotal = Number((bruto + updated[nIdx].ssPatronal).toFixed(2));
-                                updated[nIdx].importeImputado = Number(((updated[nIdx].costeEmpresaTotal * updated[nIdx].pctImputado) / 100).toFixed(2));
-                                setNominasMensuales(updated);
-                                handleModify();
-                              }}
-                            />
-                          </td>
-                          <td className={styles.numCol}>
-                            <input
-                              type="number"
-                              className={styles.input}
-                              style={{ width: '75px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
-                              value={nom.ssPatronal}
-                              onChange={e => {
-                                const ss = parseFloat(e.target.value) || 0;
-                                const updated = [...nominasMensuales];
-                                updated[nIdx].ssPatronal = ss;
-                                updated[nIdx].costeEmpresaTotal = Number((updated[nIdx].salarioBruto + ss).toFixed(2));
-                                updated[nIdx].importeImputado = Number(((updated[nIdx].costeEmpresaTotal * updated[nIdx].pctImputado) / 100).toFixed(2));
-                                setNominasMensuales(updated);
-                                handleModify();
-                              }}
-                            />
-                          </td>
-                          <td className={styles.numCol}>
-                            <strong>{formatCurrency(nom.costeEmpresaTotal)}</strong>
-                          </td>
-                          <td className={styles.numCol}>
-                            <input
-                              type="number"
-                              className={styles.input}
-                              style={{ width: '60px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
-                              value={nom.pctImputado}
-                              onChange={e => {
-                                const pct = parseFloat(e.target.value) || 0;
-                                const updated = [...nominasMensuales];
-                                updated[nIdx].pctImputado = pct;
-                                updated[nIdx].importeImputado = Number(((updated[nIdx].costeEmpresaTotal * pct) / 100).toFixed(2));
-                                setNominasMensuales(updated);
-                                handleModify();
-                              }}
-                            />
-                          </td>
-                          <td className={styles.numCol} style={{ fontWeight: 800, color: '#0D3A5F' }}>
-                            {formatCurrency(nom.importeImputado)}
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                              {/* 1. Recibo de Nómina */}
-                              {nom.reciboNominaName ? (
-                                <span className={styles.fileAttachedBadge}>📄 Nómina</span>
-                              ) : (
-                                <label className={styles.fileUploadLabel}>
-                                  <Upload size={11} /> Nómina PDF
-                                  <input
-                                    type="file"
-                                    accept=".pdf"
-                                    style={{ display: 'none' }}
-                                    onChange={e => handleFileUpload(e, (url, name) => {
-                                      const updated = [...nominasMensuales];
-                                      updated[nIdx].reciboNominaUrl = url;
-                                      updated[nIdx].reciboNominaName = name;
-                                      setNominasMensuales(updated);
-                                    })}
-                                  />
-                                </label>
-                              )}
-
-                              {/* 2. Justificante de Pago Salario SEPA */}
-                              {nom.justificantePagoName ? (
-                                <span className={styles.fileAttachedBadge} style={{ background: '#DCFCE7', color: '#166534', borderColor: '#86EFAC' }}>🏦 Pago SEPA</span>
-                              ) : (
-                                <label className={styles.fileUploadLabel}>
-                                  <Upload size={11} /> Pago Banco
-                                  <input
-                                    type="file"
-                                    accept=".pdf"
-                                    style={{ display: 'none' }}
-                                    onChange={e => handleFileUpload(e, (url, name) => {
-                                      const updated = [...nominasMensuales];
-                                      updated[nIdx].justificantePagoUrl = url;
-                                      updated[nIdx].justificantePagoName = name;
-                                      updated[nIdx].justificantePago = true;
-                                      setNominasMensuales(updated);
-                                    })}
-                                  />
-                                </label>
-                              )}
-
-                              {/* 3. Documento RLC / RNT */}
-                              {nom.rlcDocName ? (
-                                <span className={styles.fileAttachedBadge} style={{ background: '#E0E7FF', color: '#3730A3', borderColor: '#A5B4FC' }}>📑 RLC/RNT</span>
-                              ) : (
-                                <label className={styles.fileUploadLabel}>
-                                  <Upload size={11} /> RLC SS
-                                  <input
-                                    type="file"
-                                    accept=".pdf"
-                                    style={{ display: 'none' }}
-                                    onChange={e => handleFileUpload(e, (url, name) => {
-                                      const updated = [...nominasMensuales];
-                                      updated[nIdx].rlcDocUrl = url;
-                                      updated[nIdx].rlcDocName = name;
-                                      setNominasMensuales(updated);
-                                    })}
-                                  />
-                                </label>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setNominasMensuales(nominasMensuales.filter(n => n.id !== nom.id));
-                                handleModify();
-                              }}
-                              className={styles.deleteIconBtn}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          <div style={{ marginTop: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => {
+                updatePersonalEstimadoAndBudget([
+                  ...personalEstimado,
+                  {
+                    id: `cat-${Date.now()}`,
+                    category: 'Titulado/a Medio (Grupo 2)',
+                    role: 'Nuevo Perfil Técnico',
+                    monthlySalary: 1900,
+                    ssPct: 31.4,
+                    weeklyHours: 20,
+                    maxWeeklyHours: 37.5,
+                    months: 12,
+                  }
+                ]);
+              }}
+              className={styles.addSmallBtn}
+            >
+              <Plus size={16} /> Añadir Categoría Profesional Manual
+            </button>
+          </div>
         </div>
       )}
 
@@ -2308,24 +1855,13 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.5 / 3.5: PRESUPUESTO Y COFINANCIACIÓN */}
-      {((activePhase === 'solicitud' && activeSubTab === 'presupuesto') || (activePhase === 'reformulacion' && activeSubTab === 'reform_presupuesto')) && (
+      {/* 1.5: PRESUPUESTO Y COFINANCIACIÓN SOLICITADA */}
+      {activePhase === 'solicitud' && activeSubTab === 'presupuesto' && (
         <div className={styles.contentCard}>
-          {activePhase === 'reformulacion' && (
-            <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <Sliders size={20} color="#2563EB" />
-              <div>
-                <strong style={{ color: '#1E40AF', fontSize: '0.875rem' }}>🔄 Reformulación Presupuestaria por Partidas (V2) · 🔗 Conexión Continua 3.5 ↔ 3.4 ↔ Matriz</strong>
-                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.15rem 0 0 0' }}>
-                  Presupuesto Solicitado: <strong>{formatCurrency(subvencion.importeSolicitado || totalPresupuesto)}</strong> | Subvención Concedida: <strong>{formatCurrency(subvencion.importeConcedido)}</strong>. Las partidas de personal <strong>están vinculadas en tiempo real a 3.4 Personal y la Matriz de Imputación</strong>.
-                </p>
-              </div>
-            </div>
-          )}
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Calculator size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.5 Reformulación del Presupuesto por Partidas' : '5. Presupuesto Desglosado y Desviaciones'}</h2>
-              <p className={styles.sectionSubtitle}>Plan financiero por partidas y control de gasto real frente a presupuesto concedido.</p>
+              <h2 className={styles.sectionTitle}><Calculator size={20} color="#2563eb" /> 1.5 Presupuesto Solicitado y Plan Financiero</h2>
+              <p className={styles.sectionSubtitle}>Presupuesto económico total solicitado a la entidad financiadora desglosado por partidas directas e indirectas.</p>
             </div>
             <button
               type="button"
@@ -2338,28 +1874,24 @@ export function ProjectWorkspace({
 
           <div className={styles.kpiGrid}>
             <div className={`${styles.kpiCard} ${styles.kpiHighlight}`}>
-              <span className={styles.kpiLabel}>Total Proyecto Presupuestado</span>
+              <span className={styles.kpiLabel}>Total Presupuesto Solicitado</span>
               <span className={styles.kpiValue}>{formatCurrency(totalPresupuesto)}</span>
             </div>
             <div className={styles.kpiCard}>
-              <span className={styles.kpiLabel}>Subvención Concedida</span>
-              <span className={styles.kpiValue}>{formatCurrency(subvencion.importeConcedido)}</span>
+              <span className={styles.kpiLabel}>Importe Subvención Solicitada</span>
+              <span className={styles.kpiValue}>{formatCurrency(subvencion.importeSolicitado || totalPresupuesto)}</span>
             </div>
             <div className={styles.kpiCard}>
-              <span className={styles.kpiLabel}>Gasto Real Ejecutado</span>
-              <span className={styles.kpiValue} style={{ color: totalEjecutadoReal > totalPresupuesto ? '#dc2626' : '#16a34a' }}>
-                {formatCurrency(totalEjecutadoReal)}
-              </span>
+              <span className={styles.kpiLabel}>Aportación Propia ONG</span>
+              <span className={styles.kpiValue}>{formatCurrency(subvencion.aportacionPropia || 0)}</span>
             </div>
             <div className={styles.kpiCard}>
-              <span className={styles.kpiLabel}>Saldo Disponible</span>
-              <span className={styles.kpiValue} style={{ color: saldoDisponible < 0 ? '#dc2626' : '#2563eb' }}>
-                {formatCurrency(saldoDisponible)}
-              </span>
+              <span className={styles.kpiLabel}>Costes Indirectos ({presupuesto.indirectPct}%)</span>
+              <span className={styles.kpiValue}>{formatCurrency(indirectCost)}</span>
             </div>
           </div>
 
-          {/* Tabla de Partidas */}
+          {/* Tabla de Partidas Solicitadas */}
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
               <thead>
@@ -2368,18 +1900,13 @@ export function ProjectWorkspace({
                   <th>Concepto / Partida de Gasto</th>
                   <th>Importe / Mes</th>
                   <th>Meses</th>
-                  <th className={styles.numCol}>Presupuestado</th>
-                  <th className={styles.numCol}>Gasto Real</th>
-                  <th className={styles.numCol}>Desviación</th>
+                  <th className={styles.numCol}>Total Solicitado</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {presupuesto.partidas.map((partida, pIdx) => {
                   const presupuestado = partida.monthlyAmount * partida.months;
-                  const real = partida.costeReal !== undefined ? partida.costeReal : presupuestado;
-                  const desviacion = real - presupuestado;
-                  const pctDev = presupuestado > 0 ? (desviacion / presupuestado) * 100 : 0;
 
                   return (
                     <tr key={partida.id}>
@@ -2394,7 +1921,7 @@ export function ProjectWorkspace({
                             handleModify();
                           }}
                         >
-                          <option value="personal">Personal</option>
+                          <option value="personal">Personal (Categorías)</option>
                           <option value="actividades">Actividades / Talleres</option>
                           <option value="suministros">Suministros / Aulas</option>
                           <option value="dietas">Desplazamientos y Dietas</option>
@@ -2422,18 +1949,8 @@ export function ProjectWorkspace({
                           value={partida.monthlyAmount}
                           onChange={e => {
                             const newP = [...presupuesto.partidas];
-                            const newAmount = parseFloat(e.target.value) || 0;
-                            newP[pIdx].monthlyAmount = newAmount;
+                            newP[pIdx].monthlyAmount = parseFloat(e.target.value) || 0;
                             setPresupuesto({ ...presupuesto, partidas: newP });
-                            if (partida.category === 'personal') {
-                              const workerMatch = personal.find(w => w.id === partida.workerId || `pers-${w.id}` === partida.workerId || `p-${w.id}` === partida.id);
-                              if (workerMatch) {
-                                const salMes = workerMatch.monthlySalary * (1 + (workerMatch.ssPct || 31.4) / 100);
-                                const maxH = workerMatch.maxWeeklyHours || 37.5;
-                                const newHours = salMes > 0 ? Number(((newAmount / salMes) * maxH).toFixed(2)) : workerMatch.weeklyHours;
-                                setPersonal(personal.map(w => w.id === workerMatch.id ? { ...w, weeklyHours: newHours } : w));
-                              }
-                            }
                             handleModify();
                           }}
                         />
@@ -2446,43 +1963,14 @@ export function ProjectWorkspace({
                           value={partida.months}
                           onChange={e => {
                             const newP = [...presupuesto.partidas];
-                            const newMonths = parseInt(e.target.value) || 0;
-                            newP[pIdx].months = newMonths;
+                            newP[pIdx].months = parseInt(e.target.value) || 0;
                             setPresupuesto({ ...presupuesto, partidas: newP });
-                            if (partida.category === 'personal') {
-                              const workerMatch = personal.find(w => w.id === partida.workerId || `pers-${w.id}` === partida.workerId || `p-${w.id}` === partida.id);
-                              if (workerMatch) {
-                                setPersonal(personal.map(w => w.id === workerMatch.id ? { ...w, months: newMonths } : w));
-                              }
-                            }
                             handleModify();
                           }}
                         />
                       </td>
                       <td className={styles.numCol}>
                         <strong>{formatCurrency(presupuestado)}</strong>
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className={styles.input}
-                          style={{ width: '105px', textAlign: 'right' }}
-                          value={real}
-                          onChange={e => {
-                            const newP = [...presupuesto.partidas];
-                            newP[pIdx].costeReal = parseFloat(e.target.value) || 0;
-                            setPresupuesto({ ...presupuesto, partidas: newP });
-                            handleModify();
-                          }}
-                        />
-                      </td>
-                      <td className={styles.numCol} style={{ color: desviacion > 0 ? '#dc2626' : desviacion < 0 ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>
-                        <div>{desviacion > 0 ? `+${formatCurrency(desviacion)}` : formatCurrency(desviacion)}</div>
-                        {Math.abs(pctDev) > 10 && (
-                          <span style={{ fontSize: '0.6875rem', color: '#92400e', background: '#fef3c7', padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
-                            ⚠️ {pctDev > 0 ? `+${pctDev.toFixed(0)}%` : `${pctDev.toFixed(0)}%`}
-                          </span>
-                        )}
                       </td>
                       <td>
                         <button
@@ -2493,12 +1981,6 @@ export function ProjectWorkspace({
                               ...presupuesto,
                               partidas: newPartidas
                             });
-                            if (partida.category === 'personal') {
-                              const workerMatch = personal.find(w => w.id === partida.workerId || `pers-${w.id}` === partida.workerId || `p-${w.id}` === partida.id);
-                              if (workerMatch) {
-                                setPersonal(personal.filter(w => w.id !== workerMatch.id));
-                              }
-                            }
                             handleModify();
                           }}
                           className={styles.deleteIconBtn}
@@ -2513,29 +1995,763 @@ export function ProjectWorkspace({
             </table>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setPresupuesto({
-                ...presupuesto,
-                partidas: [
-                  ...presupuesto.partidas,
-                  {
-                    id: `p-${Date.now()}`,
-                    category: 'actividades',
-                    description: '',
-                    monthlyAmount: 0,
-                    months: 1,
-                    costeReal: 0
-                  }
-                ]
-              });
-              handleModify();
-            }}
-            className={styles.addSmallBtn}
-          >
-            <Plus size={16} /> Añadir Nueva Partida
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setPresupuesto({
+                  ...presupuesto,
+                  partidas: [
+                    ...presupuesto.partidas,
+                    {
+                      id: `p-${Date.now()}`,
+                      category: 'actividades',
+                      description: '',
+                      monthlyAmount: 0,
+                      months: 1,
+                      costeReal: 0
+                    }
+                  ]
+                });
+                handleModify();
+              }}
+              className={styles.addSmallBtn}
+            >
+              <Plus size={16} /> Añadir Nueva Partida
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0D3A5F' }}>Costes Indirectos:</span>
+              <input
+                type="number"
+                min="0"
+                max="25"
+                step="0.5"
+                className={styles.input}
+                style={{ width: '65px', fontWeight: 800 }}
+                value={presupuesto.indirectPct}
+                onChange={e => {
+                  setPresupuesto({ ...presupuesto, indirectPct: parseFloat(e.target.value) || 0 });
+                  handleModify();
+                }}
+              />
+              <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#64748B' }}>% ({formatCurrency(indirectCost)})</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3.4: PERSONAL Y PRESUPUESTO REFORMULADO (FUSIONADO) */}
+      {activePhase === 'reformulacion' && (activeSubTab === 'reform_presupuesto' || activeSubTab === 'reform_personal') && (
+        <div className={styles.contentCard}>
+          {/* Header Banner */}
+          <div style={{ background: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Sliders size={26} color="#2563EB" />
+              <div>
+                <strong style={{ color: '#1E40AF', fontSize: '0.9375rem' }}>🔄 Presupuesto Reformulado e Imputación Nominal de Personal (V2) · 🔗 Conexión Continua con la Matriz</strong>
+                <p style={{ fontSize: '0.75rem', color: '#1E3A8A', margin: '0.2rem 0 0 0' }}>
+                  En este apartado se asignan los <strong>profesionales reales de la entidad con nombre y apellidos</strong>, integrando su dedicación horaria, costes reales y meses directamente en el presupuesto. <strong>Cualquier cambio se traslada automáticamente al Asignador de Porcentajes de la Matriz Multiproyecto y viceversa</strong>.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleOpenMatrixModal}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: '#0D3A5F',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 0.95rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(13, 58, 95, 0.25)'
+                }}
+              >
+                <FileSpreadsheet size={15} color="#16C7B2" /> ⚡ Abrir Asignador de la Matriz
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStaffIds(staffCatalog.map(w => w.id));
+                  setIsImportStaffModalOpen(true);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: '#EAF5FB',
+                  color: '#0D3A5F',
+                  border: '1.5px solid #D5ECF8',
+                  padding: '0.5rem 0.95rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                <Users size={15} color="#009E96" /> 👥 Importar de Plantilla ({staffCatalog.length})
+              </button>
+              <button
+                type="button"
+                onClick={exportBudgetToCsv}
+                className={styles.exportBtn}
+                style={{ padding: '0.5rem 0.95rem', fontSize: '0.8125rem' }}
+              >
+                📥 Exportar CSV
+              </button>
+            </div>
+          </div>
+
+          <datalist id="staff-catalog-datalist">
+            {staffCatalog.map(w => (
+              <option key={w.id} value={w.name}>
+                {w.role} - Bruto: {w.salaryMonthly} €/mes
+              </option>
+            ))}
+          </datalist>
+
+          {/* KPIs Financieros Globales */}
+          <div className={styles.kpiGrid} style={{ marginBottom: '1.5rem' }}>
+            <div className={`${styles.kpiCard} ${styles.kpiHighlight}`}>
+              <span className={styles.kpiLabel}>Total Reformulado (V2)</span>
+              <span className={styles.kpiValue}>{formatCurrency(totalPresupuesto)}</span>
+            </div>
+            <div className={styles.kpiCard}>
+              <span className={styles.kpiLabel}>Subvención Concedida</span>
+              <span className={styles.kpiValue}>{formatCurrency(subvencion.importeConcedido)}</span>
+            </div>
+            <div className={styles.kpiCard}>
+              <span className={styles.kpiLabel}>Total Imputado en Personal</span>
+              <span className={styles.kpiValue} style={{ color: '#2563EB' }}>
+                {formatCurrency(personal.reduce((sum, w) => {
+                  const salMes = w.monthlySalary * (1 + (w.ssPct || 31.4) / 100);
+                  const maxH = w.maxWeeklyHours || 37.5;
+                  const pct = maxH > 0 ? (w.weeklyHours / maxH) : 1;
+                  return sum + (salMes * pct * (w.months || 12));
+                }, 0))}
+              </span>
+            </div>
+            <div className={styles.kpiCard}>
+              <span className={styles.kpiLabel}>Saldo Disponible / Desviación</span>
+              <span className={styles.kpiValue} style={{ color: (subvencion.importeConcedido - totalPresupuesto) < 0 ? '#DC2626' : '#16A34A' }}>
+                {formatCurrency(subvencion.importeConcedido - totalPresupuesto)}
+              </span>
+            </div>
+          </div>
+
+          {/* ═════════════════════════════════════════════════════════════════════════ */}
+          {/* BLOQUE 1: PERSONAL NOMINAL Y COSTES DE PLANTILLA REFORMULADOS            */}
+          {/* ═════════════════════════════════════════════════════════════════════════ */}
+          <div style={{ marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.0625rem', fontWeight: 800, color: '#0D3A5F', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Users size={18} color="#2563EB" /> 1. Personal y Plantilla Nominal Asignada al Proyecto ({personal.length} profesionales)
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: '#1E40AF', background: '#EFF6FF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 700, border: '1px solid #BFDBFE' }}>
+                🔗 Integrado en tiempo real con la Matriz de Imputación
+              </span>
+            </div>
+
+            {personal.length === 0 ? (
+              <div style={{
+                padding: '2.5rem 1.5rem',
+                textAlign: 'center',
+                background: '#F8FAFC',
+                borderRadius: '12px',
+                border: '1.5px dashed #CBD5E1',
+                margin: '1rem 0'
+              }}>
+                <Users size={36} color="#64748B" style={{ margin: '0 auto 0.75rem auto' }} />
+                <h4 style={{ margin: 0, color: '#1E293B', fontWeight: 800, fontSize: '1rem' }}>
+                  Ningún profesional asignado actualmente a este proyecto
+                </h4>
+                <p style={{ margin: '0.4rem 0 1.25rem 0', color: '#64748B', fontSize: '0.8125rem' }}>
+                  Asigna personas trabajadoras desde la plantilla de la entidad, crea nuevos perfiles o distribuye porcentajes en la Matriz de Imputación.
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStaffIds(staffCatalog.map(w => w.id));
+                      setIsImportStaffModalOpen(true);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      background: '#0D9488',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.55rem 1rem',
+                      borderRadius: '8px',
+                      fontSize: '0.8125rem',
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Users size={15} /> 👥 Importar de la Plantilla ({staffCatalog.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updatePersonalAndBudget([
+                        ...personal,
+                        {
+                          id: `pers-${Date.now()}`,
+                          name: '',
+                          role: 'Técnico/a de Proyecto',
+                          contractType: 'Temporal',
+                          monthlySalary: 1850,
+                          ssPct: 31.4,
+                          weeklyHours: 37.5,
+                          maxWeeklyHours: 37.5,
+                          months: 12,
+                        }
+                      ]);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      background: '#FFFFFF',
+                      color: '#0D3A5F',
+                      border: '1.5px solid #CBD5E1',
+                      padding: '0.55rem 1rem',
+                      borderRadius: '8px',
+                      fontSize: '0.8125rem',
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Plus size={15} /> + Añadir Profesional Manual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenMatrixModal}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      background: '#0D3A5F',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.55rem 1rem',
+                      borderRadius: '8px',
+                      fontSize: '0.8125rem',
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <FileSpreadsheet size={15} color="#16C7B2" /> ⚡ Asignar Porcentajes en la Matriz
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className={styles.tableWrapper}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={{ minWidth: '220px' }}>Profesional Asignado</th>
+                        <th>Categoría / Puesto</th>
+                        <th>Bruto / Mes (€)</th>
+                        <th>SS Patronal (%)</th>
+                        <th>Horas/sem</th>
+                        <th>Meses</th>
+                        <th className={styles.numCol}>Coste Imputado / Mes</th>
+                        <th className={styles.numCol}>Total Imputado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {personal.map((worker, idx) => {
+                        const costeEmpresaMes = worker.monthlySalary * (1 + worker.ssPct / 100);
+                        const maxH = worker.maxWeeklyHours || 37.5;
+                        const pct = maxH > 0 ? (worker.weeklyHours / maxH) : 1;
+                        const costeMesImputado = costeEmpresaMes * pct;
+                        const costeTotal = costeMesImputado * (worker.months || 12);
+                        const isOverLimit = worker.weeklyHours > worker.maxWeeklyHours;
+                        const pctJornada = maxH > 0 ? ((worker.weeklyHours / maxH) * 100) : 100;
+
+                        return (
+                          <tr key={worker.id} style={{ background: isOverLimit ? '#fef2f2' : 'inherit' }}>
+                            <td>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <input
+                                  type="text"
+                                  list="staff-catalog-datalist"
+                                  className={styles.input}
+                                  placeholder="Nombre o busca en plantilla..."
+                                  value={worker.name}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    const matched = staffCatalog.find(w => w.name.toLowerCase() === val.toLowerCase());
+                                    const newP = [...personal];
+                                    if (matched) {
+                                      newP[idx] = {
+                                        ...newP[idx],
+                                        name: matched.name,
+                                        role: matched.role || newP[idx].role,
+                                        monthlySalary: matched.salaryMonthly || newP[idx].monthlySalary,
+                                        ssPct: matched.ssPct || newP[idx].ssPct,
+                                        maxWeeklyHours: matched.maxWeeklyHours || newP[idx].maxWeeklyHours,
+                                      };
+                                    } else {
+                                      newP[idx].name = val;
+                                    }
+                                    updatePersonalAndBudget(newP);
+                                  }}
+                                />
+                                <select
+                                  style={{
+                                    fontSize: '0.75rem',
+                                    padding: '0.25rem 0.5rem',
+                                    borderRadius: '6px',
+                                    border: '1.5px solid #D5ECF8',
+                                    background: '#EAF5FB',
+                                    color: '#0D3A5F',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                  value=""
+                                  onChange={e => {
+                                    const found = staffCatalog.find(w => w.id === e.target.value);
+                                    if (found) {
+                                      const newP = [...personal];
+                                      newP[idx] = {
+                                        ...newP[idx],
+                                        name: found.name,
+                                        role: found.role,
+                                        monthlySalary: found.salaryMonthly,
+                                        ssPct: found.ssPct || 31.4,
+                                        maxWeeklyHours: found.maxWeeklyHours || 37.5,
+                                      };
+                                      updatePersonalAndBudget(newP);
+                                    }
+                                  }}
+                                >
+                                  <option value="">⚡ Cargar de plantilla...</option>
+                                  {staffCatalog.map(w => (
+                                    <option key={w.id} value={w.id}>
+                                      {w.name} · {w.role} ({w.salaryMonthly} €/m)
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                className={styles.input}
+                                value={worker.role}
+                                onChange={e => {
+                                  const newP = [...personal];
+                                  newP[idx].role = e.target.value;
+                                  updatePersonalAndBudget(newP);
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                className={styles.input}
+                                style={{ width: '90px' }}
+                                value={worker.monthlySalary}
+                                onChange={e => {
+                                  const newP = [...personal];
+                                  newP[idx].monthlySalary = parseFloat(e.target.value) || 0;
+                                  updatePersonalAndBudget(newP);
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.1"
+                                className={styles.input}
+                                style={{ width: '75px' }}
+                                value={worker.ssPct}
+                                onChange={e => {
+                                  const newP = [...personal];
+                                  newP[idx].ssPct = parseFloat(e.target.value) || 0;
+                                  updatePersonalAndBudget(newP);
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                  <input
+                                    type="number"
+                                    className={styles.input}
+                                    style={{ width: '70px', borderColor: isOverLimit ? '#dc2626' : 'inherit' }}
+                                    value={worker.weeklyHours}
+                                    onChange={e => {
+                                      const newP = [...personal];
+                                      newP[idx].weeklyHours = parseFloat(e.target.value) || 0;
+                                      updatePersonalAndBudget(newP);
+                                    }}
+                                  />
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0D3A5F' }}>
+                                    {pctJornada.toFixed(0)}%
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.2rem' }}>
+                                  {[25, 50, 100].map(pVal => (
+                                    <button
+                                      key={pVal}
+                                      type="button"
+                                      onClick={() => {
+                                        const newP = [...personal];
+                                        newP[idx].weeklyHours = Number(((pVal / 100) * maxH).toFixed(2));
+                                        updatePersonalAndBudget(newP);
+                                      }}
+                                      style={{
+                                        fontSize: '0.6875rem',
+                                        padding: '0.1rem 0.3rem',
+                                        borderRadius: '4px',
+                                        border: '1px solid #CBD5E1',
+                                        background: Math.abs(pctJornada - pVal) < 2 ? '#0D3A5F' : '#F1F5F9',
+                                        color: Math.abs(pctJornada - pVal) < 2 ? 'white' : '#475569',
+                                        cursor: 'pointer',
+                                        fontWeight: 700
+                                      }}
+                                    >
+                                      {pVal}%
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <input
+                                  type="number"
+                                  className={styles.input}
+                                  style={{ width: '65px' }}
+                                  value={worker.months}
+                                  onChange={e => {
+                                    const newP = [...personal];
+                                    newP[idx].months = parseInt(e.target.value) || 0;
+                                    updatePersonalAndBudget(newP);
+                                  }}
+                                />
+                                <div style={{ display: 'flex', gap: '0.2rem' }}>
+                                  {[6, 10, 12].map(mVal => (
+                                    <button
+                                      key={mVal}
+                                      type="button"
+                                      onClick={() => {
+                                        const newP = [...personal];
+                                        newP[idx].months = mVal;
+                                        updatePersonalAndBudget(newP);
+                                      }}
+                                      style={{
+                                        fontSize: '0.6875rem',
+                                        padding: '0.1rem 0.3rem',
+                                        borderRadius: '4px',
+                                        border: '1px solid #CBD5E1',
+                                        background: (worker.months || 12) === mVal ? '#0D3A5F' : '#F1F5F9',
+                                        color: (worker.months || 12) === mVal ? 'white' : '#475569',
+                                        cursor: 'pointer',
+                                        fontWeight: 700
+                                      }}
+                                    >
+                                      {mVal}m
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                            <td className={styles.numCol}>
+                              <strong>{formatCurrency(costeMesImputado)}</strong>
+                            </td>
+                            <td className={styles.numCol} style={{ color: '#1e3a8a', fontWeight: 800 }}>
+                              {formatCurrency(costeTotal)}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updatePersonalAndBudget(personal.filter(p => p.id !== worker.id));
+                                }}
+                                className={styles.deleteIconBtn}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updatePersonalAndBudget([
+                        ...personal,
+                        {
+                          id: `pers-${Date.now()}`,
+                          name: '',
+                          role: 'Técnico/a de Proyecto',
+                          contractType: 'Temporal',
+                          monthlySalary: 1850,
+                          ssPct: 31.4,
+                          weeklyHours: 37.5,
+                          maxWeeklyHours: 37.5,
+                          months: 12,
+                        }
+                      ]);
+                    }}
+                    className={styles.addSmallBtn}
+                  >
+                    <Plus size={16} /> Añadir Profesional Manual
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={generateMonthlyPayrollsFromStaff}
+                    style={{
+                      background: '#0D3A5F',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '8px',
+                      fontSize: '0.8125rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                    }}
+                  >
+                    <FileText size={15} /> ⚡ Generar Cuadro de Nóminas Mensuales (Fase 4)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ═════════════════════════════════════════════════════════════════════════ */}
+          {/* BLOQUE 2: OTRAS PARTIDAS DIRECTAS DE GASTO                               */}
+          {/* ═════════════════════════════════════════════════════════════════════════ */}
+          <div style={{ marginBottom: '2rem' }}>
+            <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '1.0625rem', fontWeight: 800, color: '#0D3A5F', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Calculator size={18} color="#0D9488" /> 2. Otras Partidas Directas del Presupuesto (Actividades, Suministros, Dietas)
+            </h3>
+
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Categoría</th>
+                    <th>Concepto / Partida de Gasto</th>
+                    <th>Importe / Mes</th>
+                    <th>Meses</th>
+                    <th className={styles.numCol}>Presupuestado</th>
+                    <th className={styles.numCol}>Gasto Real</th>
+                    <th className={styles.numCol}>Desviación</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {presupuesto.partidas.filter(p => p.category !== 'personal').map((partida) => {
+                    const pIdx = presupuesto.partidas.findIndex(p => p.id === partida.id);
+                    const presupuestado = partida.monthlyAmount * partida.months;
+                    const real = partida.costeReal !== undefined ? partida.costeReal : presupuestado;
+                    const desviacion = real - presupuestado;
+                    const pctDev = presupuestado > 0 ? (desviacion / presupuestado) * 100 : 0;
+
+                    return (
+                      <tr key={partida.id}>
+                        <td>
+                          <select
+                            className={styles.select}
+                            value={partida.category}
+                            onChange={e => {
+                              const newP = [...presupuesto.partidas];
+                              newP[pIdx].category = e.target.value;
+                              setPresupuesto({ ...presupuesto, partidas: newP });
+                              handleModify();
+                            }}
+                          >
+                            <option value="actividades">Actividades / Talleres</option>
+                            <option value="suministros">Suministros / Aulas</option>
+                            <option value="dietas">Desplazamientos y Dietas</option>
+                            <option value="otros">Otros Gastos Directos</option>
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={partida.description}
+                            onChange={e => {
+                              const newP = [...presupuesto.partidas];
+                              newP[pIdx].description = e.target.value;
+                              setPresupuesto({ ...presupuesto, partidas: newP });
+                              handleModify();
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            style={{ width: '90px' }}
+                            value={partida.monthlyAmount}
+                            onChange={e => {
+                              const newP = [...presupuesto.partidas];
+                              newP[pIdx].monthlyAmount = parseFloat(e.target.value) || 0;
+                              setPresupuesto({ ...presupuesto, partidas: newP });
+                              handleModify();
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            style={{ width: '65px' }}
+                            value={partida.months}
+                            onChange={e => {
+                              const newP = [...presupuesto.partidas];
+                              newP[pIdx].months = parseInt(e.target.value) || 0;
+                              setPresupuesto({ ...presupuesto, partidas: newP });
+                              handleModify();
+                            }}
+                          />
+                        </td>
+                        <td className={styles.numCol}>
+                          <strong>{formatCurrency(presupuestado)}</strong>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            style={{ width: '105px', textAlign: 'right' }}
+                            value={real}
+                            onChange={e => {
+                              const newP = [...presupuesto.partidas];
+                              newP[pIdx].costeReal = parseFloat(e.target.value) || 0;
+                              setPresupuesto({ ...presupuesto, partidas: newP });
+                              handleModify();
+                            }}
+                          />
+                        </td>
+                        <td className={styles.numCol} style={{ color: desviacion > 0 ? '#dc2626' : desviacion < 0 ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>
+                          <div>{desviacion > 0 ? `+${formatCurrency(desviacion)}` : formatCurrency(desviacion)}</div>
+                          {Math.abs(pctDev) > 10 && (
+                            <span style={{ fontSize: '0.6875rem', color: '#92400e', background: '#fef3c7', padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
+                              ⚠️ {pctDev > 0 ? `+${pctDev.toFixed(0)}%` : `${pctDev.toFixed(0)}%`}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newPartidas = presupuesto.partidas.filter(p => p.id !== partida.id);
+                              setPresupuesto({
+                                ...presupuesto,
+                                partidas: newPartidas
+                              });
+                              handleModify();
+                            }}
+                            className={styles.deleteIconBtn}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setPresupuesto({
+                    ...presupuesto,
+                    partidas: [
+                      ...presupuesto.partidas,
+                      {
+                        id: `p-${Date.now()}`,
+                        category: 'actividades',
+                        description: '',
+                        monthlyAmount: 0,
+                        months: 1,
+                        costeReal: 0
+                      }
+                    ]
+                  });
+                  handleModify();
+                }}
+                className={styles.addSmallBtn}
+              >
+                <Plus size={16} /> Añadir Partida de Gasto
+              </button>
+            </div>
+          </div>
+
+          {/* ═════════════════════════════════════════════════════════════════════════ */}
+          {/* BLOQUE 3: COSTES INDIRECTOS Y CUADRE ECONÓMICO FINAL                      */}
+          {/* ═════════════════════════════════════════════════════════════════════════ */}
+          <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '12px', padding: '1.25rem' }}>
+            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9375rem', fontWeight: 800, color: '#0D3A5F' }}>
+              3. Resumen de Costes Directos, Indirectos y Cuadre Económico
+            </h4>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700 }}>Total Costes Directos:</span>
+                <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>{formatCurrency(directCost)}</div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700 }}>% Costes Indirectos:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.2rem' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max="25"
+                    step="0.5"
+                    className={styles.input}
+                    style={{ width: '65px', fontWeight: 800 }}
+                    value={presupuesto.indirectPct}
+                    onChange={e => {
+                      setPresupuesto({ ...presupuesto, indirectPct: parseFloat(e.target.value) || 0 });
+                      handleModify();
+                    }}
+                  />
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#0D3A5F' }}>% = {formatCurrency(indirectCost)}</span>
+                </div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700 }}>Total Presupuesto Reformulado:</span>
+                <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#2563EB' }}>{formatCurrency(totalPresupuesto)}</div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700 }}>Subvención Concedida:</span>
+                <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>{formatCurrency(subvencion.importeConcedido)}</div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2554,7 +2770,7 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.6 / 3.6: CRONOGRAMA GANTT */}
+      {/* 1.6 / 3.5: CRONOGRAMA GANTT */}
       {((activePhase === 'solicitud' && activeSubTab === 'cronograma') || (activePhase === 'reformulacion' && activeSubTab === 'reform_cronograma')) && (
         <div className={styles.contentCard}>
           {activePhase === 'reformulacion' && (
@@ -2570,7 +2786,7 @@ export function ProjectWorkspace({
           )}
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}><Calendar size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.6 Reformulación del Cronograma Temporal' : '7. Cronograma de Ejecución Temporal (Diagrama Gantt)'}</h2>
+              <h2 className={styles.sectionTitle}><Calendar size={20} color="#2563eb" /> {activePhase === 'reformulacion' ? '3.5 Reformulación del Cronograma Temporal' : '1.6 Cronograma de Ejecución Temporal (Diagrama Gantt)'}</h2>
               <p className={styles.sectionSubtitle}>Planifica la temporalización mes a mes de las actividades y la dedicación del personal del proyecto.</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -2652,14 +2868,14 @@ export function ProjectWorkspace({
             </div>
           </div>
 
-          {/* TABLA 2: TEMPORALIZACIÓN DE PERSONAL (SINCRONIZADA CON 3.4, 3.5 Y LA MATRIZ) */}
+          {/* TABLA 2: TEMPORALIZACIÓN DE PERSONAL (SINCRONIZADA CON 3.4 Y LA MATRIZ) */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <h3 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0D3A5F', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <span>👥 2. Temporalización y Meses de Imputación de Personal ({personal.length} técnicos)</span>
               </h3>
               <span style={{ fontSize: '0.75rem', color: '#166534', background: '#DCFCE7', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
-                🔗 Sincronizado en tiempo real con 3.5 Presupuesto y Matriz de Imputación
+                🔗 Sincronizado en tiempo real con 3.4 Personal y Presupuesto y Matriz de Imputación
               </span>
             </div>
 
@@ -2741,7 +2957,7 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {/* 1.7 / 2.1 / 3.1 / 3.7: TRAMITACIÓN, SNAPSHOTS Y REFORMULACIÓN */}
+      {/* 1.7 / 2.1 / 3.1 / 3.6: TRAMITACIÓN, SNAPSHOTS Y REFORMULACIÓN */}
       {((activePhase === 'solicitud' && activeSubTab === 'snapshot_solicitud') || 
         (activePhase === 'subsanacion' && activeSubTab === 'requerimientos') || 
         (activePhase === 'reformulacion' && (activeSubTab === 'comparador' || activeSubTab === 'reform_baseline'))) && (
@@ -3319,6 +3535,29 @@ export function ProjectWorkspace({
             </div>
           </div>
         </div>
+      )}
+
+      {isMatrixModalOpen && matrixData && (
+        <GlobalImputationMatrix
+          initialWorkers={matrixData.workers}
+          projects={matrixData.projects}
+          initialLifecycleMap={matrixData.lifecycleMap}
+          initialStats={matrixData.globalStats}
+          isModal={true}
+          onClose={async () => {
+            setIsMatrixModalOpen(false);
+            const freshData = await getFullProjectWorkspaceData(projectId);
+            if (freshData && freshData.toolsMap) {
+              const fw = freshData.toolsMap['project-workspace-full'] as ProjectWorkspaceData;
+              if (fw) {
+                if (fw.personal) setPersonal(fw.personal);
+                if (fw.presupuesto) setPresupuesto(fw.presupuesto);
+                if (fw.nominasMensuales) setNominasMensuales(fw.nominasMensuales);
+              }
+            }
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );

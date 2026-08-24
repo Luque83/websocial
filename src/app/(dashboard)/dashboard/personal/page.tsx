@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation';
 import { getOrgStaffCatalogAction } from '@/app/actions/personal';
 import { StaffDirectoryManager } from './StaffDirectoryManager';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata = {
   title: 'Plantilla y Nóminas · WebSocial',
   description: 'Gestión centralizada del personal de la entidad con sus salarios brutos y costes de Seguridad Social.',

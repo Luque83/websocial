@@ -32,6 +32,7 @@ import {
   Layers
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Worker, ProjectAllocation } from '@/config/staff';
 import type { WorkerProjectLifecycle } from '@/app/actions/personal';
 import { savePersonalMatrixAction } from '@/app/actions/personal';
@@ -46,11 +47,12 @@ interface GlobalImputationMatrixProps {
     totalAvailableHours: number;
     totalAllocatedHours: number;
     overAllocatedWorkersCount: number;
-    totalSolicitadoCost: number;
     totalConcedidoCost: number;
     totalEjecutadoPaidCost: number;
     payrollSepaCompliancePct: number;
   };
+  isModal?: boolean;
+  onClose?: () => void;
 }
 
 export type ViewMode = 'visual_bars' | 'interactive_editor' | 'matrix360' | 'auditor';
@@ -80,7 +82,10 @@ export function GlobalImputationMatrix({
   projects,
   initialLifecycleMap = {},
   initialStats,
+  isModal,
+  onClose,
 }: GlobalImputationMatrixProps) {
+  const router = useRouter();
   const [activeMode, setActiveMode] = useState<ViewMode>('visual_bars');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'alert' | 'ok' | 'free'>('all');
@@ -188,6 +193,7 @@ export function GlobalImputationMatrix({
       const res = await savePersonalMatrixAction({ workers }, undefined, true);
       if (res.success) {
         showToast('¡Matriz sincronizada con éxito con los presupuestos y expedientes de todos los proyectos!');
+        router.refresh();
       } else {
         alert(res.error || 'Error al guardar la matriz.');
       }
@@ -287,7 +293,7 @@ export function GlobalImputationMatrix({
     { id: 'sede', name: 'Sede / Estructura General', phase: 'Estructura', grantAmount: 0 }
   ];
 
-  return (
+  const content = (
     <div className={styles.container}>
       {/* Toast Notification */}
       {toastMessage && (
@@ -971,7 +977,7 @@ export function GlobalImputationMatrix({
       )}
 
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      {/* PESTAÑA 3: MATRIZ CUADRICULADA CLÁSICA (DIFF, FASES 1-4 & NÓMINAS)       */}
+      {/* PESTAÑA 3: MATRIZ CUADRICULADA CLÁSICA (DIFF, REFORMULADO & NÓMINAS)     */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'matrix360' && (
         <div className={styles.matrixCard}>
@@ -979,10 +985,10 @@ export function GlobalImputationMatrix({
             <div>
               <h2 className={styles.matrixTitle}>
                 <FileSpreadsheet size={20} color="#7C3AED" />
-                <span>Matriz Detallada con las 4 Fases del Ciclo de Vida</span>
+                <span>Matriz Detallada con Fases de Dedicación y Ejecución</span>
               </h2>
               <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8125rem', color: '#64748B' }}>
-                Vista cuantitativa con las 4 minibarras por celda: 🔵 1. Solicitado | 🟣 2. Reformulado | 🟡 3. Nóminas SEPA | 🟢 4. Justificado RLC.
+                Vista cuantitativa con las 3 minibarras de seguimiento por celda: 🟣 1. Reformulado / Concedido | 🟡 2. Nóminas SEPA | 🟢 3. Justificado RLC.
               </p>
             </div>
 
@@ -1043,7 +1049,7 @@ export function GlobalImputationMatrix({
                         {maxH} h/sem
                       </td>
 
-                      {/* Projects cells with 4 Mini-Bars */}
+                      {/* Projects cells with 3 Mini-Bars */}
                       {projects.map((p) => {
                         const alloc = worker.allocations.find(a => a.projectId === p.id);
                         const h = alloc?.weeklyHours || 0;
@@ -1071,10 +1077,8 @@ export function GlobalImputationMatrix({
                                 </span>
                               </div>
 
-                              {/* 4 Mini-Bars Stack */}
+                              {/* 3 Mini-Bars Stack (Concedido/Reformulado, Nóminas SEPA, Justificado) */}
                               {(() => {
-                                const solH = lc?.solicitadoHours !== undefined ? lc.solicitadoHours : h;
-                                const solP = maxH > 0 ? (solH / maxH) * 100 : 0;
                                 const refP = maxH > 0 ? (h / maxH) * 100 : 0;
                                 const pMonths = lc?.ejecutadoMonthsPaid !== undefined ? lc.ejecutadoMonthsPaid : (h > 0 ? 6 : 0);
                                 const tMonths = lc?.ejecutadoTotalMonths || 12;
@@ -1083,29 +1087,22 @@ export function GlobalImputationMatrix({
 
                                 return (
                                   <div className={styles.fourBarsBox}>
-                                    <div className={styles.barLine} title={`1. Solicitud: ${solH}h/sem`}>
-                                      <span className={styles.barTagSol}>1. SOL</span>
-                                      <div className={styles.barTrack}>
-                                        <div className={styles.barFillSol} style={{ width: `${Math.min(100, solP)}%` }} />
-                                      </div>
-                                      <span className={styles.barNumber}>{solH}h</span>
-                                    </div>
-                                    <div className={styles.barLine} title={`2. Reformulación / Concedido: ${h}h/sem`}>
-                                      <span className={styles.barTagRef}>2. REF</span>
+                                    <div className={styles.barLine} title={`1. Reformulación / Concedido: ${h}h/sem (${refP.toFixed(0)}% jornada)`}>
+                                      <span className={styles.barTagRef}>1. REF</span>
                                       <div className={styles.barTrack}>
                                         <div className={styles.barFillRef} style={{ width: `${Math.min(100, refP)}%` }} />
                                       </div>
                                       <span className={styles.barNumber}>{h}h</span>
                                     </div>
-                                    <div className={styles.barLine} title={`3. Nóminas pagadas: ${pMonths}/${tMonths}m`}>
-                                      <span className={styles.barTagEjec}>3. EJE</span>
+                                    <div className={styles.barLine} title={`2. Nóminas pagadas SEPA: ${pMonths}/${tMonths}m`}>
+                                      <span className={styles.barTagEjec}>2. EJE</span>
                                       <div className={styles.barTrack}>
                                         <div className={styles.barFillEjec} style={{ width: `${Math.min(100, ejeP)}%` }} />
                                       </div>
                                       <span className={styles.barNumber}>{pMonths}/{tMonths}m</span>
                                     </div>
-                                    <div className={styles.barLine} title={`4. Justificación contable: ${jusP}% liquidado`}>
-                                      <span className={styles.barTagJust}>4. JUS</span>
+                                    <div className={styles.barLine} title={`3. Justificación contable: ${jusP}% liquidado`}>
+                                      <span className={styles.barTagJust}>3. JUS</span>
                                       <div className={styles.barTrack}>
                                         <div className={styles.barFillJust} style={{ width: `${Math.min(100, jusP)}%` }} />
                                       </div>
@@ -1354,4 +1351,44 @@ export function GlobalImputationMatrix({
       )}
     </div>
   );
+
+  if (isModal) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+        backgroundColor: 'rgba(15, 23, 42, 0.85)', zIndex: 9999,
+        display: 'flex', flexDirection: 'column', padding: '1rem',
+        backdropFilter: 'blur(4px)'
+      }}>
+        <div style={{
+          backgroundColor: '#f8fafc',
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          flex: 1,
+          maxWidth: '1600px',
+          margin: '0 auto',
+          width: '100%',
+          overflow: 'hidden',
+          border: '1px solid #e2e8f0'
+        }}>
+          <button onClick={onClose} style={{
+            position: 'absolute', top: '16px', right: '16px', zIndex: 99,
+            background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%',
+            width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', color: '#64748b'
+          }} title="Cerrar Matriz">
+            <X size={24} />
+          </button>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {content}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return content;
 }

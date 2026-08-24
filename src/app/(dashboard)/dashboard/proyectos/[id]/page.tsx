@@ -2,6 +2,10 @@ import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { ProjectWorkspace } from '@/components/project/ProjectWorkspace';
+import { getOrgStaffCatalogAction } from '@/app/actions/personal';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface ProjectToolRow {
   tool_slug: string;
@@ -43,6 +47,8 @@ export default async function ProjectPage({
     toolsDataMap[pt.tool_slug] = pt.data;
   });
 
+  const staffCatalog = await getOrgStaffCatalogAction();
+
   // Also fetch entity matrix if available
   const { data: generalMatrixRecord } = await supabase
     .from('project_tools')
@@ -56,6 +62,7 @@ export default async function ProjectPage({
       projectId={id}
       initialProject={project}
       initialToolsData={toolsDataMap}
+      initialStaffCatalog={staffCatalog}
       generalMatrix={generalMatrixRecord?.data || null}
     />
   );

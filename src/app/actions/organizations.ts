@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { saveToolData } from '@/app/actions/tools';
 
 export type UserRole = 'director' | 'tecnico' | 'economico' | 'auditor';
 
@@ -83,14 +84,7 @@ export async function getOrganizationAction(): Promise<OrganizationProfile> {
   };
 
   // Seed default
-  await supabase
-    .from('project_tools')
-    .upsert({
-      project_id: '00000000-0000-0000-0000-000000000000',
-      tool_slug: 'perfil-organizacion-equipo',
-      data: initialOrg,
-      updated_at: new Date().toISOString(),
-    } as any, { onConflict: 'project_id, tool_slug' });
+  await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', initialOrg);
 
   return initialOrg;
 }
@@ -120,14 +114,7 @@ export async function inviteTeamMemberAction(member: {
 
   org.members.push(newMember);
 
-  await supabase
-    .from('project_tools')
-    .upsert({
-      project_id: '00000000-0000-0000-0000-000000000000',
-      tool_slug: 'perfil-organizacion-equipo',
-      data: org,
-      updated_at: new Date().toISOString(),
-    } as any, { onConflict: 'project_id, tool_slug' });
+  await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', org);
 
   revalidatePath('/dashboard/equipo');
   return { success: true };
@@ -139,14 +126,7 @@ export async function removeTeamMemberAction(memberId: string): Promise<{ succes
 
   org.members = org.members.filter(m => m.id !== memberId);
 
-  await supabase
-    .from('project_tools')
-    .upsert({
-      project_id: '00000000-0000-0000-0000-000000000000',
-      tool_slug: 'perfil-organizacion-equipo',
-      data: org,
-      updated_at: new Date().toISOString(),
-    } as any, { onConflict: 'project_id, tool_slug' });
+  await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', org);
 
   revalidatePath('/dashboard/equipo');
   return { success: true };

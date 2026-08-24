@@ -78,16 +78,23 @@ export async function saveOrgStaffCatalogAction(workers: Worker[]): Promise<{ su
       return { success: false, error: 'No estás autenticado.' };
     }
 
-    // Guardar en project_tools con tool_slug = 'org-staff-catalog'
+    // Guardar en project_tools con tool_slug = 'org-staff-catalog' en los proyectos del usuario
     const { data: existingProjects } = await supabase
       .from('projects')
       .select('id')
-      .order('created_at', { ascending: true })
-      .limit(1);
+      .eq('user_id', user.id);
 
-    const targetProjectId = existingProjects?.[0]?.id || '00000000-0000-0000-0000-000000000000';
-
-    await saveToolData(targetProjectId, 'org-staff-catalog', { workers, updatedAt: new Date().toISOString() });
+    if (existingProjects && existingProjects.length > 0) {
+      for (const p of existingProjects) {
+        await saveToolData(p.id, 'org-staff-catalog', { workers, updatedAt: new Date().toISOString() });
+      }
+    } else {
+      try {
+        await saveToolData('00000000-0000-0000-0000-000000000000', 'org-staff-catalog', { workers, updatedAt: new Date().toISOString() });
+      } catch {
+        // Fallback si no hay proyectos creados
+      }
+    }
 
     revalidatePath('/dashboard/personal');
     revalidatePath('/dashboard/matriz-imputacion');
@@ -120,24 +127,19 @@ export interface WorkerProjectLifecycle {
   workerId: string;
   projectId: string;
   projectName: string;
-  // 1. SOLICITUD
-  solicitadoHours: number;
-  solicitadoMonths: number;
-  solicitadoMonthlyCost: number;
-  solicitadoTotalCost: number;
-  // 2. REFORMULACIÓN
+  // 1. REFORMULACIÓN / CONCEDIDO (V2)
   reformuladoHours: number;
   reformuladoMonths: number;
   reformuladoMonthlyCost: number;
   reformuladoTotalCost: number;
-  // 3. EJECUCIÓN REAL
+  // 2. EJECUCIÓN REAL (NÓMINAS SEPA)
   ejecutadoMonthsPaid: number;
   ejecutadoTotalMonths: number;
   ejecutadoPaidAmount: number;
   hasSepaProof: boolean;
   hasRlcProof: boolean;
   pendingSepaCount: number;
-  // 4. JUSTIFICACIÓN
+  // 3. JUSTIFICACIÓN CONTABLE
   isFullyJustified: boolean;
   justifiedAmount: number;
   auditIssuesCount: number;
@@ -154,7 +156,6 @@ export interface GlobalImputationMatrixPayload {
     totalAvailableHours: number;
     totalAllocatedHours: number;
     overAllocatedWorkersCount: number;
-    totalSolicitadoCost: number;
     totalConcedidoCost: number;
     totalEjecutadoPaidCost: number;
     payrollSepaCompliancePct: number;
@@ -206,14 +207,41 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
     });
 
     const lifecycleMap: Record<string, WorkerProjectLifecycle> = {};
-    let totalSolicitadoCost = 0;
     let totalConcedidoCost = 0;
     let totalEjecutadoPaidCost = 0;
     let totalPayrollsCount = 0;
     let totalPaidPayrollsCount = 0;
 
-    // Unificar asignaciones en los trabajadores y computar el ciclo de vida
-    const mergedWorkers: Worker[] = rawWorkers.map(w => {
+    // 1. Recopilar todos los trabajadores existentes tanto del catálogo central como de cada uno de los proyectos
+    const allWorkersMap = new Map<string, Worker>();
+    rawWorkers.forEach(w => allWorkersMap.set(w.id, w));
+
+    workspaceMap.forEach((wData) => {
+      if (wData && Array.isArray(wData.personal)) {
+        wData.personal.forEach((pw: any) => {
+          if (pw && pw.name && pw.name.trim() && !Array.from(allWorkersMap.values()).some(cw => isWorkerMatch(cw, pw))) {
+            const newId = pw.workerId || pw.id || `w-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+            allWorkersMap.set(newId, {
+              id: newId,
+              name: pw.name.trim(),
+              role: pw.role || 'Técnico/a de Proyecto',
+              category: 'Técnico/a de Proyecto',
+              contractType: pw.contractType || 'Temporal',
+              salaryMonthly: pw.monthlySalary || 1850,
+              pagas: 12,
+              ssPct: pw.ssPct || 31.4,
+              maxWeeklyHours: pw.maxWeeklyHours || 37.5,
+              allocations: [],
+            });
+          }
+        });
+      }
+    });
+
+    const fullWorkersList = Array.from(allWorkersMap.values());
+
+    // 2. Unificar asignaciones en los trabajadores y computar el ciclo de vida
+    const mergedWorkers: Worker[] = fullWorkersList.map(w => {
       const existingAllocations = Array.isArray(w.allocations) ? [...w.allocations] : [];
 
       const salMes = w.pagas === 14 ? (w.salaryMonthly * 14) / 12 : w.salaryMonthly;
@@ -221,47 +249,37 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
       const costeEmpresaMes = salMes + ssMes;
       const maxH = w.maxWeeklyHours || 37.5;
 
-      formattedProjects.forEach(proj => {
+      formattedProjects.forEach((proj, projIdx) => {
         const wData = workspaceMap.get(proj.id);
         const pToolWorkers = personalToolMap.get(proj.id) || [];
-        const projectStaffList: any[] = (wData?.personal && Array.isArray(wData.personal) && wData.personal.length > 0) 
+        const hasProjectData = !!wData || pToolWorkers.length > 0;
+        const projectStaffList: any[] = (wData?.personal && Array.isArray(wData.personal)) 
           ? wData.personal 
           : pToolWorkers;
 
-        // También verificar si existen partidas de personal en el presupuesto del proyecto
-        const projectBudgetPartidas = (wData?.presupuesto && Array.isArray(wData.presupuesto.partidas))
-          ? wData.presupuesto.partidas
-          : (costesToolMap.get(proj.id)?.partidas || []);
-        
-        const matchingPartida = Array.isArray(projectBudgetPartidas)
-          ? projectBudgetPartidas.find((p: any) => p.category === 'personal' && (p.workerId === w.id || p.workerId === `pers-${w.id}` || isWorkerMatch(w, { name: p.description })))
-          : null;
-
         const assignedInProj = projectStaffList.find((p: any) => isWorkerMatch(w, p));
-
         const allocIdx = existingAllocations.findIndex(a => a.projectId === proj.id);
+
         let activeHours = 0;
         let activeMonths = 12;
 
-        if (assignedInProj && assignedInProj.weeklyHours > 0) {
-          activeHours = assignedInProj.weeklyHours;
-          activeMonths = assignedInProj.months || 12;
-        } else if (matchingPartida && matchingPartida.monthlyAmount > 0) {
-          // Extraer horas de la partida presupuestaria reformulada
-          const pctFromCost = costeEmpresaMes > 0 ? (matchingPartida.monthlyAmount / costeEmpresaMes) : 0;
-          activeHours = Number((pctFromCost * maxH).toFixed(2));
-          activeMonths = matchingPartida.months || 12;
-        } else if (allocIdx >= 0 && existingAllocations[allocIdx].weeklyHours > 0) {
-          activeHours = existingAllocations[allocIdx].weeklyHours;
-          activeMonths = existingAllocations[allocIdx].months || 12;
-        } else if (!wData && (!projectStaffList || projectStaffList.length === 0)) {
-          // Si el proyecto aún no se ha personalizado ni guardado en BD, usar la plantilla base por defecto
-          if (w.name.includes('Elena') || w.id === 'w-1') {
-            activeHours = 20;
+        if (hasProjectData) {
+          if (assignedInProj && assignedInProj.weeklyHours > 0) {
+            activeHours = assignedInProj.weeklyHours;
+            activeMonths = assignedInProj.months || 12;
+          } else {
+            // Si el proyecto tiene datos pero este trabajador no está asignado o tiene 0 horas
+            activeHours = 0;
             activeMonths = 12;
-          } else if (w.name.includes('Carlos') || w.id === 'w-2') {
-            activeHours = 18.75;
-            activeMonths = 10;
+          }
+        } else {
+          // Si el proyecto nunca ha sido guardado, respetar asignación previa si existiera en el catálogo
+          if (allocIdx >= 0 && existingAllocations[allocIdx].weeklyHours > 0) {
+            activeHours = existingAllocations[allocIdx].weeklyHours;
+            activeMonths = existingAllocations[allocIdx].months || 12;
+          } else {
+            activeHours = 0;
+            activeMonths = 12;
           }
         }
 
@@ -329,7 +347,6 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
         const totalCost = Number((monthlyCost * activeMonths).toFixed(2));
 
         if (activeHours > 0) {
-          totalSolicitadoCost += totalCost;
           totalConcedidoCost += totalCost;
           totalEjecutadoPaidCost += paidAmount;
           totalPayrollsCount += activeMonths;
@@ -341,24 +358,19 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
           workerId: w.id,
           projectId: proj.id,
           projectName: proj.name,
-          // 1. SOLICITUD (V1)
-          solicitadoHours: activeHours > 0 ? Math.min(maxH, activeHours + (activeHours > 10 ? 2 : 0)) : 0,
-          solicitadoMonths: activeMonths,
-          solicitadoMonthlyCost: monthlyCost,
-          solicitadoTotalCost: totalCost,
-          // 2. REFORMULACIÓN (V2)
+          // 1. REFORMULACIÓN / CONCEDIDO (V2)
           reformuladoHours: activeHours,
           reformuladoMonths: activeMonths,
           reformuladoMonthlyCost: monthlyCost,
           reformuladoTotalCost: totalCost,
-          // 3. EJECUCIÓN
+          // 2. EJECUCIÓN
           ejecutadoMonthsPaid: paidPayrolls.length,
           ejecutadoTotalMonths: activeMonths,
           ejecutadoPaidAmount: paidAmount,
           hasSepaProof: paidPayrolls.some(p => !!p.justificantePagoName),
           hasRlcProof: paidPayrolls.some(p => !!p.rlcDocName),
           pendingSepaCount: activeMonths - paidPayrolls.length,
-          // 4. JUSTIFICACIÓN
+          // 3. JUSTIFICACIÓN
           isFullyJustified: paidPayrolls.length >= activeMonths && activeHours > 0,
           justifiedAmount: paidAmount,
           auditIssuesCount: paidPayrolls.length < 6 && activeHours > 0 ? 1 : 0,
@@ -395,7 +407,6 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
         totalAvailableHours,
         totalAllocatedHours,
         overAllocatedWorkersCount,
-        totalSolicitadoCost,
         totalConcedidoCost,
         totalEjecutadoPaidCost,
         payrollSepaCompliancePct: compliancePct,
@@ -412,7 +423,6 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
         totalAvailableHours: 150,
         totalAllocatedHours: 0,
         overAllocatedWorkersCount: 0,
-        totalSolicitadoCost: 0,
         totalConcedidoCost: 0,
         totalEjecutadoPaidCost: 0,
         payrollSepaCompliancePct: 100,
@@ -511,6 +521,8 @@ export async function savePersonalMatrixAction(
             ...currentCostes,
             partidas: [...newPersonalPartidas, ...nonPersonalPartidas],
           };
+          await saveToolData(targetProjectId, 'costes-proyecto', updatedCostesPayload);
+          await saveToolData(targetProjectId, 'personal-proyecto', { workers: updatedPersonalList });
 
           // 4.5 Actualizar cronograma
           const currentCronograma = (await getToolData(targetProjectId, 'cronograma') as Record<string, unknown> | null) || {};

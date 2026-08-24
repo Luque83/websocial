@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
 
 export interface ProjectWorkspaceData {
   diagnostico: {
@@ -65,6 +66,16 @@ export interface ProjectWorkspaceData {
     target: number;
     current: number;
     source: string;
+  }>;
+  personalEstimado?: Array<{
+    id: string;
+    category: string;
+    role: string;
+    monthlySalary: number;
+    ssPct: number;
+    weeklyHours: number;
+    maxWeeklyHours: number;
+    months: number;
   }>;
   personal: Array<{
     id: string;
@@ -220,57 +231,117 @@ export async function saveProjectWorkspaceAction(projectId: string, data: Projec
   ];
 
   for (const record of toolRecords) {
-    await supabase
+    const { data: existing } = await supabase
       .from('project_tools')
-      .upsert(record as any, { onConflict: 'project_id, tool_slug' });
+      .select('id')
+      .eq('project_id', record.project_id)
+      .eq('tool_slug', record.tool_slug)
+      .maybeSingle();
+
+    let upsertErr;
+    if (existing) {
+      const res = await supabase
+        .from('project_tools')
+        .update({ data: record.data, updated_at: record.updated_at })
+        .eq('id', existing.id);
+      upsertErr = res.error;
+    } else {
+      const res = await supabase
+        .from('project_tools')
+        .insert(record);
+      upsertErr = res.error;
+    }
+    
+    if (upsertErr) {
+      console.error('Error upserting tool record:', record.tool_slug, upsertErr);
+      throw new Error(`Error BD guardando ${record.tool_slug}: ${upsertErr.message}`);
+    }
   }
 
   // 3. Sincronizar bidireccionalmente la asignación de personal hacia la Matriz de Imputación y Catálogo de la entidad
   try {
-    const { isWorkerMatch } = await import('@/config/staff');
+    const { isWorkerMatch, DEFAULT_STAFF_CATALOG } = await import('@/config/staff');
     const { getOrgStaffCatalogAction, saveOrgStaffCatalogAction } = await import('@/app/actions/personal');
     const catalogWorkers = await getOrgStaffCatalogAction();
+    const baseCatalog = Array.isArray(catalogWorkers) && catalogWorkers.length > 0 ? [...catalogWorkers] : [...DEFAULT_STAFF_CATALOG];
 
-    if (Array.isArray(catalogWorkers) && catalogWorkers.length > 0) {
-      const updatedCatalog = catalogWorkers.map(cw => {
-        const assignedInProject = (data.personal || []).find(p => isWorkerMatch(cw, p));
+    const updatedCatalog = baseCatalog.map(cw => {
+      const assignedInProject = (data.personal || []).find(p => isWorkerMatch(cw, p));
 
-        const currentAllocations = Array.isArray(cw.allocations) ? [...cw.allocations] : [];
-        const allocIdx = currentAllocations.findIndex(a => a.projectId === projectId);
+      const currentAllocations = Array.isArray(cw.allocations) ? [...cw.allocations] : [];
+      const allocIdx = currentAllocations.findIndex(a => a.projectId === projectId);
 
-        if (assignedInProject && assignedInProject.weeklyHours > 0) {
-          if (allocIdx >= 0) {
-            currentAllocations[allocIdx] = {
-              ...currentAllocations[allocIdx],
-              projectName: data.diagnostico?.projectName || currentAllocations[allocIdx].projectName,
-              weeklyHours: assignedInProject.weeklyHours,
-              months: assignedInProject.months || 12,
-            };
-          } else {
-            currentAllocations.push({
-              id: `alloc-${cw.id}-${projectId}`,
+      if (assignedInProject && assignedInProject.weeklyHours > 0) {
+        if (allocIdx >= 0) {
+          currentAllocations[allocIdx] = {
+            ...currentAllocations[allocIdx],
+            projectName: data.diagnostico?.projectName || currentAllocations[allocIdx].projectName,
+            weeklyHours: assignedInProject.weeklyHours,
+            months: assignedInProject.months || 12,
+          };
+        } else {
+          currentAllocations.push({
+            id: `alloc-${cw.id}-${projectId}`,
+            projectId: projectId,
+            projectName: data.diagnostico?.projectName || 'Proyecto',
+            weeklyHours: assignedInProject.weeklyHours,
+            months: assignedInProject.months || 12,
+          });
+        }
+      } else if (allocIdx >= 0) {
+        currentAllocations[allocIdx] = {
+          ...currentAllocations[allocIdx],
+          weeklyHours: 0,
+        };
+      }
+
+      return {
+        ...cw,
+        role: assignedInProject?.role || cw.role,
+        salaryMonthly: assignedInProject?.monthlySalary || cw.salaryMonthly,
+        ssPct: assignedInProject?.ssPct || cw.ssPct,
+        maxWeeklyHours: assignedInProject?.maxWeeklyHours || cw.maxWeeklyHours,
+        allocations: currentAllocations,
+      };
+    });
+
+    // Añadir cualquier nuevo trabajador que se haya creado en el proyecto y no existiese en el catálogo
+    for (const p of (data.personal || [])) {
+      if (p.name && p.name.trim() && !updatedCatalog.some(cw => isWorkerMatch(cw, p))) {
+        const newWorkerId = p.workerId || p.id || `w-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        updatedCatalog.push({
+          id: newWorkerId,
+          name: p.name.trim(),
+          role: p.role || 'Técnico/a de Proyecto',
+          category: 'Técnico/a de Proyecto',
+          contractType: p.contractType || 'Temporal',
+          salaryMonthly: p.monthlySalary || 1850,
+          pagas: 12,
+          ssPct: p.ssPct || 31.4,
+          maxWeeklyHours: p.maxWeeklyHours || 37.5,
+          allocations: [
+            {
+              id: `alloc-${newWorkerId}-${projectId}`,
               projectId: projectId,
               projectName: data.diagnostico?.projectName || 'Proyecto',
-              weeklyHours: assignedInProject.weeklyHours,
-              months: assignedInProject.months || 12,
-            });
-          }
-        } else if (allocIdx >= 0) {
-          currentAllocations[allocIdx].weeklyHours = 0;
-        }
-
-        return {
-          ...cw,
-          allocations: currentAllocations,
-        };
-      });
-
-      // Guardar el catálogo central actualizado en la entidad
-      await saveOrgStaffCatalogAction(updatedCatalog);
+              weeklyHours: p.weeklyHours || 0,
+              months: p.months || 12,
+            }
+          ]
+        });
+      }
     }
+
+    // Guardar el catálogo central actualizado en la entidad
+    await saveOrgStaffCatalogAction(updatedCatalog);
   } catch (syncErr) {
     console.error('Error sincronizando personal con matriz general:', syncErr);
   }
+
+  revalidatePath('/dashboard/matriz-imputacion');
+  revalidatePath('/dashboard/personal');
+  revalidatePath(`/dashboard/proyectos/${projectId}`);
+  revalidatePath('/dashboard/proyectos/[id]', 'page');
 
   return { success: true, savedAt: new Date().toISOString() };
 }

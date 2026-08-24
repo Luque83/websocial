@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation';
 import { getGlobalImputationMatrixAction } from '@/app/actions/personal';
 import { GlobalImputationMatrix } from './GlobalImputationMatrix';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata = {
   title: 'Matriz de Imputación de Personal Multiproyecto · WebSocial',
   description: 'Gestión cruzada y prevención de sobreimputación horaria de trabajadores entre proyectos y subvenciones.',

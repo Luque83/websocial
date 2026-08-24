@@ -113,3 +113,78 @@ export const DEFAULT_STAFF_CATALOG: Worker[] = [
     allocations: [],
   },
 ];
+
+export interface EstimatedCategoryProfile {
+  id: string;
+  category: string;
+  role: string;
+  monthlySalary: number;
+  ssPct: number;
+  weeklyHours: number;
+  maxWeeklyHours: number;
+  months: number;
+}
+
+export const DEFAULT_CATEGORY_PROFILES: EstimatedCategoryProfile[] = [
+  {
+    id: 'cat-1',
+    category: 'Titulado/a Superior (Grupo 1)',
+    role: 'Trabajador/a Social',
+    monthlySalary: 2100,
+    ssPct: 31.4,
+    weeklyHours: 20,
+    maxWeeklyHours: 37.5,
+    months: 12,
+  },
+  {
+    id: 'cat-2',
+    category: 'Titulado/a Medio (Grupo 2)',
+    role: 'Educador/a Social',
+    monthlySalary: 1850,
+    ssPct: 31.4,
+    weeklyHours: 18.75,
+    maxWeeklyHours: 37.5,
+    months: 10,
+  },
+  {
+    id: 'cat-3',
+    category: 'Titulado/a Superior (Grupo 1)',
+    role: 'Psicólogo/a',
+    monthlySalary: 2300,
+    ssPct: 31.4,
+    weeklyHours: 15,
+    maxWeeklyHours: 37.5,
+    months: 12,
+  },
+  {
+    id: 'cat-4',
+    category: 'Técnico/a Especialista (Grupo 3)',
+    role: 'Integrador/a Social',
+    monthlySalary: 1750,
+    ssPct: 31.4,
+    weeklyHours: 20,
+    maxWeeklyHours: 37.5,
+    months: 10,
+  },
+  {
+    id: 'cat-5',
+    category: 'Personal Administrativo (Grupo 4)',
+    role: 'Administrativo/a de Gestión',
+    monthlySalary: 1600,
+    ssPct: 31.4,
+    weeklyHours: 10,
+    maxWeeklyHours: 37.5,
+    months: 12,
+  },
+  {
+    id: 'cat-6',
+    category: 'Titulado/a Superior (Grupo 1)',
+    role: 'Coordinador/a Técnico/a de Proyecto',
+    monthlySalary: 2400,
+    ssPct: 31.4,
+    weeklyHours: 20,
+    maxWeeklyHours: 37.5,
+    months: 12,
+  }
+];
+
