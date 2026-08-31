@@ -4,26 +4,51 @@ import { createClient } from '@/lib/supabase/server';
 
 /**
  * Guarda datos de una herramienta en project_tools.
- * Usa upsert nativo aprovechando la constraint UNIQUE(project_id, tool_slug).
+ * Comprueba si ya existe el registro para actualizar o insertar, compatible con esquemas con o sin constraint UNIQUE.
  */
 export async function saveToolData(projectId: string, toolSlug: string, data: unknown) {
   const supabase = await createClient();
 
-  const { error } = await supabase
+  // 1. Buscar si ya existe el registro para este proyecto y herramienta
+  const { data: existingRow, error: selectError } = await supabase
     .from('project_tools')
-    .upsert(
-      {
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('tool_slug', toolSlug)
+    .maybeSingle();
+
+  if (selectError) {
+    console.error('Error checking existing tool data:', selectError);
+  }
+
+  let saveError;
+
+  if (existingRow?.id) {
+    // 2. Si existe, actualizar
+    const res = await supabase
+      .from('project_tools')
+      .update({
+        data,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existingRow.id);
+    saveError = res.error;
+  } else {
+    // 3. Si no existe, insertar nuevo
+    const res = await supabase
+      .from('project_tools')
+      .insert({
         project_id: projectId,
         tool_slug: toolSlug,
         data,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'project_id,tool_slug' }
-    );
+      });
+    saveError = res.error;
+  }
 
-  if (error) {
-    console.error('Error saving tool data:', error);
-    throw new Error(`Failed to save tool data for ${toolSlug}: ${error.message}`);
+  if (saveError) {
+    console.error('Error saving tool data:', saveError);
+    throw new Error(`Failed to save tool data for ${toolSlug}: ${saveError.message}`);
   }
 }
 
