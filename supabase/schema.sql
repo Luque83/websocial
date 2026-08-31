@@ -68,11 +68,21 @@ CREATE POLICY "Users can access their own projects"
   ON public.projects FOR ALL
   USING (auth.uid() = user_id);
 
--- Project Tools: acceso mediante el proyecto padre
+-- Project Tools: acceso mediante el proyecto padre o herramientas globales de organización
 CREATE POLICY "Users can access tools for their projects"
   ON public.project_tools FOR ALL
+  TO authenticated
   USING (
-    EXISTS (
+    project_id = '00000000-0000-0000-0000-000000000000'
+    OR EXISTS (
+      SELECT 1 FROM public.projects
+      WHERE projects.id = project_tools.project_id
+      AND projects.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    project_id = '00000000-0000-0000-0000-000000000000'
+    OR EXISTS (
       SELECT 1 FROM public.projects
       WHERE projects.id = project_tools.project_id
       AND projects.user_id = auth.uid()

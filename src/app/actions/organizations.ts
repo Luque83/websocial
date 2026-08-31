@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { saveToolData } from '@/app/actions/tools';
+import { saveToolData, getToolData } from '@/app/actions/tools';
 
 export type UserRole = 'director' | 'tecnico' | 'economico' | 'auditor';
 
@@ -61,16 +61,11 @@ export async function getOrganizationAction(): Promise<OrganizationProfile> {
     throw new Error('Usuario no autenticado');
   }
 
-  // Check if organization profile exists in project_tools table with special slug
-  const { data: orgRecord } = await supabase
-    .from('project_tools')
-    .select('data')
-    .eq('project_id', '00000000-0000-0000-0000-000000000000')
-    .eq('tool_slug', 'perfil-organizacion-equipo')
-    .single();
+  // Check if organization profile exists using getToolData
+  const orgData = await getToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo') as OrganizationProfile | null;
 
-  if (orgRecord?.data) {
-    return orgRecord.data as OrganizationProfile;
+  if (orgData && orgData.members) {
+    return orgData;
   }
 
   const initialOrg: OrganizationProfile = {
@@ -83,8 +78,12 @@ export async function getOrganizationAction(): Promise<OrganizationProfile> {
     members: DEFAULT_MEMBERS,
   };
 
-  // Seed default
-  await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', initialOrg);
+  // Seed default safely
+  try {
+    await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', initialOrg);
+  } catch (seedErr) {
+    console.warn('Notice: Could not persist initial org profile seed:', seedErr);
+  }
 
   return initialOrg;
 }
@@ -114,19 +113,26 @@ export async function inviteTeamMemberAction(member: {
 
   org.members.push(newMember);
 
-  await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', org);
+  try {
+    await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', org);
+  } catch (err) {
+    console.warn('Could not save team member:', err);
+  }
 
   revalidatePath('/dashboard/equipo');
   return { success: true };
 }
 
 export async function removeTeamMemberAction(memberId: string): Promise<{ success: boolean }> {
-  const supabase = await createClient();
   const org = await getOrganizationAction();
 
   org.members = org.members.filter(m => m.id !== memberId);
 
-  await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', org);
+  try {
+    await saveToolData('00000000-0000-0000-0000-000000000000', 'perfil-organizacion-equipo', org);
+  } catch (err) {
+    console.warn('Could not save team member removal:', err);
+  }
 
   revalidatePath('/dashboard/equipo');
   return { success: true };
