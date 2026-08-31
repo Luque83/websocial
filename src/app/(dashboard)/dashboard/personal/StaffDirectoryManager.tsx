@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { 
   Users, 
   Plus, 
@@ -10,15 +10,14 @@ import {
   Building2, 
   CreditCard, 
   Calculator, 
-  Clock, 
-  ArrowRight,
   ShieldCheck,
   FileSpreadsheet,
-  AlertCircle
+  AlertTriangle,
 } from 'lucide-react';
 import Link from 'next/link';
 import type { Worker } from '@/config/staff';
 import { saveOrgStaffCatalogAction } from '@/app/actions/personal';
+import { calcularCosteEmpresa } from '@/lib/cost-calculator';
 import styles from './personal.module.css';
 
 interface StaffDirectoryManagerProps {
@@ -27,17 +26,18 @@ interface StaffDirectoryManagerProps {
 
 export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerProps) {
   const [workers, setWorkers] = useState<Worker[]>(initialWorkers);
-  const [isSaving, setIsSaving] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ msg, type });
     setTimeout(() => setToastMessage(null), 3500);
   };
 
   const handleAddWorker = () => {
     const newWorker: Worker = {
-      id: `w-${Date.now()}`,
+      id: crypto.randomUUID(),
       name: '',
       role: 'Técnico de Proyecto',
       category: 'Titulado Medio / Grupo 2',
@@ -50,7 +50,7 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
     setWorkers([...workers, newWorker]);
   };
 
-  const handleUpdateWorker = (idx: number, field: keyof Worker, value: unknown) => {
+  const handleUpdateWorker = <K extends keyof Worker>(idx: number, field: K, value: Worker[K]) => {
     const updated = [...workers];
     updated[idx] = {
       ...updated[idx],
@@ -59,39 +59,38 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
     setWorkers(updated);
   };
 
-  const handleDeleteWorker = (idx: number) => {
-    if (confirm('¿Eliminar este trabajador/a de la plantilla?')) {
-      setWorkers(workers.filter((_, i) => i !== idx));
-    }
+  const handleDeleteConfirm = () => {
+    if (deleteIndex === null) return;
+    setWorkers(workers.filter((_, i) => i !== deleteIndex));
+    setDeleteIndex(null);
+    showToast('Trabajador/a eliminado de la plantilla.');
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const res = await saveOrgStaffCatalogAction(workers);
-      if (res.success) {
-        showToast('Plantilla oficial y datos económicos guardados correctamente.');
-      } else {
-        alert(res.error || 'Error guardando la plantilla.');
+  const handleSave = () => {
+    startTransition(async () => {
+      try {
+        const res = await saveOrgStaffCatalogAction(workers);
+        if (res.success) {
+          showToast('Plantilla oficial y datos económicos guardados correctamente.');
+        } else {
+          showToast(res.error || 'Error guardando la plantilla.', 'error');
+        }
+      } catch {
+        showToast('Error inesperado al guardar.', 'error');
       }
-    } catch {
-      alert('Error inesperado al guardar.');
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
-  // KPIs
+  // KPIs con cost-calculator
   const totalWorkers = workers.length;
   const totalMonthlyGross = workers.reduce((acc, w) => {
-    const salMes = w.pagas === 14 ? (w.salaryMonthly * 14) / 12 : w.salaryMonthly;
-    return acc + salMes;
+    const calc = calcularCosteEmpresa(w.salaryMonthly, w.pagas || 12, w.ssPct || 31.4);
+    return acc + calc.salarioBase;
   }, 0);
 
   const totalMonthlyCompanyCost = workers.reduce((acc, w) => {
-    const salMes = w.pagas === 14 ? (w.salaryMonthly * 14) / 12 : w.salaryMonthly;
-    const ssMes = (salMes * (w.ssPct || 31.4)) / 100;
-    return acc + (salMes + ssMes);
+    const calc = calcularCosteEmpresa(w.salaryMonthly, w.pagas || 12, w.ssPct || 31.4);
+    return acc + calc.costeEmpresaMes;
   }, 0);
 
   return (
@@ -102,7 +101,7 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
           position: 'fixed',
           bottom: '24px',
           right: '24px',
-          background: '#0D3A5F',
+          background: toastMessage.type === 'error' ? '#991B1B' : '#0D3A5F',
           color: 'white',
           padding: '0.85rem 1.5rem',
           borderRadius: '10px',
@@ -113,10 +112,51 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
           gap: '0.5rem',
           fontSize: '0.875rem',
           fontWeight: 700,
-          border: '1.5px solid #16C7B2'
+          border: `1.5px solid ${toastMessage.type === 'error' ? '#FCA5A5' : '#16C7B2'}`
         }}>
-          <CheckCircle2 size={18} color="#16C7B2" />
-          <span>{toastMessage}</span>
+          <CheckCircle2 size={18} color={toastMessage.type === 'error' ? '#FCA5A5' : '#16C7B2'} />
+          <span>{toastMessage.msg}</span>
+        </div>
+      )}
+
+      {/* Modal Confirmación de Eliminación */}
+      {deleteIndex !== null && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '2rem',
+            maxWidth: '420px', width: '90%', boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#FEE2E2', borderRadius: '10px', padding: '0.6rem', display: 'flex' }}>
+                <AlertTriangle size={20} color="#DC2626" />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
+                ¿Eliminar trabajador/a?
+              </h3>
+            </div>
+            <p style={{ color: '#64748B', fontSize: '0.875rem', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              Se eliminará a <strong>{workers[deleteIndex]?.name || 'este trabajador'}</strong> de la plantilla oficial. Recuerda guardar los cambios tras confirmar.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setDeleteIndex(null)}
+                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', background: 'white', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', background: '#DC2626', color: 'white', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -150,10 +190,10 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isPending}
             className={styles.btnPrimary}
           >
-            <Save size={16} /> {isSaving ? 'Guardando...' : 'Guardar Plantilla'}
+            <Save size={16} /> {isPending ? 'Guardando...' : 'Guardar Plantilla'}
           </button>
         </div>
       </div>
@@ -232,10 +272,15 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
               </tr>
             </thead>
             <tbody>
+              {workers.length === 0 && (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', fontSize: '0.875rem' }}>
+                    No hay trabajadores en la plantilla. Añade el primer trabajador/a.
+                  </td>
+                </tr>
+              )}
               {workers.map((worker, idx) => {
-                const salMes = worker.pagas === 14 ? (worker.salaryMonthly * 14) / 12 : worker.salaryMonthly;
-                const ssMes = (salMes * (worker.ssPct || 31.4)) / 100;
-                const costeEmpresaMes = salMes + ssMes;
+                const calc = calcularCosteEmpresa(worker.salaryMonthly, worker.pagas || 12, worker.ssPct || 31.4);
 
                 return (
                   <tr key={worker.id}>
@@ -304,13 +349,13 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
                     </td>
                     <td className={styles.numCol}>
                       <span className={styles.costTag}>
-                        {Math.round(costeEmpresaMes).toLocaleString('es-ES')} €/m
+                        {Math.round(calc.costeEmpresaMes).toLocaleString('es-ES')} €/m
                       </span>
                     </td>
                     <td>
                       <button
                         type="button"
-                        onClick={() => handleDeleteWorker(idx)}
+                        onClick={() => setDeleteIndex(idx)}
                         className={styles.deleteBtn}
                         title="Eliminar de plantilla"
                       >
@@ -332,7 +377,7 @@ export function StaffDirectoryManager({ initialWorkers }: StaffDirectoryManagerP
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isPending}
             className={styles.btnPrimary}
             style={{ fontSize: '0.8125rem', padding: '0.45rem 1rem' }}
           >

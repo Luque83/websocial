@@ -1,18 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { 
-  Calendar, 
   Clock, 
-  AlertTriangle, 
-  CheckCircle2, 
   Plus, 
-  Trash2, 
-  Bell, 
-  FolderKanban,
-  Check
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import type { DeadlineItem } from '@/types/grant-lifecycle';
+import { saveGlobalDeadlinesAction } from '@/app/actions/grant-lifecycle';
 import styles from '../personal/personal.module.css';
 
 interface DeadlinesManagerProps {
@@ -34,15 +31,31 @@ export function DeadlinesManager({ initialDeadlines }: DeadlinesManagerProps) {
   const [title, setTitle] = useState('');
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineType, setDeadlineType] = useState<DeadlineItem['deadlineType']>('solicitud');
+  const [toast, setToast] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const persistDeadlines = (updated: DeadlineItem[]) => {
+    startTransition(async () => {
+      const res = await saveGlobalDeadlinesAction(updated);
+      if (!res.success) {
+        showToast('Error al guardar los plazos. Inténtalo de nuevo.');
+      }
+    });
+  };
 
   const handleAdd = () => {
     if (!title || !deadlineDate) {
-      alert('Por favor introduce el título y la fecha límite');
+      showToast('Por favor introduce el título y la fecha límite');
       return;
     }
 
     const newD: DeadlineItem = {
-      id: `dead-${Date.now()}`,
+      id: crypto.randomUUID(),
       title,
       deadlineDate,
       deadlineType,
@@ -50,31 +63,52 @@ export function DeadlinesManager({ initialDeadlines }: DeadlinesManagerProps) {
       reminderDays: 5,
     };
 
-    setDeadlines([...deadlines, newD]);
+    const updated = [...deadlines, newD];
+    setDeadlines(updated);
+    persistDeadlines(updated);
     setTitle('');
     setDeadlineDate('');
     setIsAdding(false);
+    showToast('Plazo guardado correctamente');
   };
 
   const handleToggleCompleted = (id: string) => {
-    setDeadlines(deadlines.map(d => d.id === id ? { ...d, isCompleted: !d.isCompleted } : d));
+    const updated = deadlines.map(d => d.id === id ? { ...d, isCompleted: !d.isCompleted } : d);
+    setDeadlines(updated);
+    persistDeadlines(updated);
   };
 
   const handleDelete = (id: string) => {
-    setDeadlines(deadlines.filter(d => d.id !== id));
+    const updated = deadlines.filter(d => d.id !== id);
+    setDeadlines(updated);
+    persistDeadlines(updated);
+    showToast('Plazo eliminado');
   };
 
   return (
     <div className={styles.container}>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '24px', right: '24px',
+          background: '#0D3A5F', color: 'white',
+          padding: '0.85rem 1.5rem', borderRadius: '10px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          zIndex: 9999, fontSize: '0.875rem', fontWeight: 700,
+          border: '1.5px solid #16C7B2'
+        }}>
+          {toast}
+        </div>
+      )}
+
       {/* Header */}
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Motor de Plazos y Alertas Críticas</h1>
           <p className={styles.subtitle}>
-            Supervisión centralizada de fechas límite de presentación, requerimientos de subsanación de 10 días, informes intermedios y justificaciones finales.
+            Supervisión centralizada de fechas límite de presentación, requerimientos de subsanación, informes intermedios y justificaciones finales.
           </p>
         </div>
-
         <button
           type="button"
           onClick={() => setIsAdding(true)}
@@ -117,8 +151,8 @@ export function DeadlinesManager({ initialDeadlines }: DeadlinesManagerProps) {
             <button type="button" onClick={() => setIsAdding(false)} className={styles.btnSecondary} style={{ background: '#e2e8f0', color: '#334155' }}>
               Cancelar
             </button>
-            <button type="button" onClick={handleAdd} className={styles.btnPrimary}>
-              Guardar Plazo
+            <button type="button" onClick={handleAdd} className={styles.btnPrimary} disabled={isPending}>
+              {isPending ? 'Guardando...' : 'Guardar Plazo'}
             </button>
           </div>
         </div>
@@ -139,6 +173,13 @@ export function DeadlinesManager({ initialDeadlines }: DeadlinesManagerProps) {
               </tr>
             </thead>
             <tbody>
+              {deadlines.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', fontSize: '0.875rem' }}>
+                    No hay plazos registrados. Añade el primer hito con el botón superior.
+                  </td>
+                </tr>
+              )}
               {deadlines.map(d => {
                 const deadline = new Date(d.deadlineDate);
                 const now = new Date();
@@ -151,7 +192,7 @@ export function DeadlinesManager({ initialDeadlines }: DeadlinesManagerProps) {
                   <tr key={d.id} style={{ background: isPast ? '#FFF5F5' : isUrgent ? '#FFFBEB' : 'inherit' }}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Clock size={18} color={isPast ? '#DC2626' : isUrgent ? '#D97706' : '#0D3A5F'} />
+                        {isPast ? <AlertTriangle size={18} color="#DC2626" /> : <Clock size={18} color={isUrgent ? '#D97706' : '#0D3A5F'} />}
                         <strong style={{ color: d.isCompleted ? '#64748B' : '#0D3A5F', textDecoration: d.isCompleted ? 'line-through' : 'none' }}>
                           {d.title}
                         </strong>
@@ -180,6 +221,7 @@ export function DeadlinesManager({ initialDeadlines }: DeadlinesManagerProps) {
                       <button
                         type="button"
                         onClick={() => handleToggleCompleted(d.id)}
+                        disabled={isPending}
                         style={{
                           background: d.isCompleted ? '#DCFCE7' : '#F1F5F9',
                           color: d.isCompleted ? '#166534' : '#475569',
@@ -188,16 +230,18 @@ export function DeadlinesManager({ initialDeadlines }: DeadlinesManagerProps) {
                           borderRadius: '6px',
                           fontSize: '0.75rem',
                           fontWeight: 700,
-                          cursor: 'pointer'
+                          cursor: isPending ? 'wait' : 'pointer',
                         }}
                       >
-                        {d.isCompleted ? '✓ Hecho' : 'Marcar Hecho'}
+                        {d.isCompleted ? <CheckCircle2 size={14} style={{ display: 'inline', marginRight: '4px' }} /> : null}
+                        {d.isCompleted ? 'Hecho' : 'Marcar Hecho'}
                       </button>
                     </td>
                     <td>
                       <button
                         type="button"
                         onClick={() => handleDelete(d.id)}
+                        disabled={isPending}
                         className={styles.deleteBtn}
                       >
                         <Trash2 size={16} />

@@ -113,3 +113,15 @@ CREATE POLICY "Public Read for project documents"
 CREATE POLICY "Authenticated users can upload project documents"
   ON storage.objects FOR INSERT
   WITH CHECK (bucket_id = 'project-documents' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated users can update their own project documents" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete their own project documents" ON storage.objects;
+
+CREATE POLICY "Authenticated users can update their own project documents"
+  ON storage.objects FOR UPDATE
+  USING (bucket_id = 'project-documents' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+CREATE POLICY "Authenticated users can delete their own project documents"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'project-documents' AND auth.uid()::text = (storage.foldername(name))[1]);
+

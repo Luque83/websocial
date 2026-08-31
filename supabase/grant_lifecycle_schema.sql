@@ -203,16 +203,89 @@ ALTER TABLE public.project_incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_deadlines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organization_documents ENABLE ROW LEVEL SECURITY;
 
--- Políticas permisivas autenticadas para la entidad
-CREATE POLICY "Users can manage funding_calls of their org" ON public.funding_calls FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage funding_rules" ON public.funding_rules FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage project_versions" ON public.project_versions FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage project_objectives" ON public.project_objectives FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage project_activities" ON public.project_activities FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage project_indicators" ON public.project_indicators FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage budget_lines" ON public.budget_lines FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage expenses" ON public.expenses FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage requirements" ON public.requirements FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage project_incidents" ON public.project_incidents FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage project_deadlines" ON public.project_deadlines FOR ALL TO authenticated USING (true);
-CREATE POLICY "Users can manage organization_documents" ON public.organization_documents FOR ALL TO authenticated USING (true);
+-- Políticas RLS: acceso restringido por ownership del proyecto/organización
+
+-- funding_calls: acceso a través de organización propia
+CREATE POLICY "Users can manage funding_calls of their org"
+  ON public.funding_calls FOR ALL
+  USING (
+    organization_id IN (
+      SELECT id FROM public.organizations WHERE owner_id = auth.uid()
+    )
+  );
+
+-- funding_rules: acceso a través de la convocatoria de la organización
+CREATE POLICY "Users can manage funding_rules"
+  ON public.funding_rules FOR ALL
+  USING (
+    funding_call_id IN (
+      SELECT fc.id FROM public.funding_calls fc
+      JOIN public.organizations o ON o.id = fc.organization_id
+      WHERE o.owner_id = auth.uid()
+    )
+  );
+
+-- Tablas vinculadas a project_id: acceso a través del proyecto propio
+CREATE POLICY "Users can manage project_versions"
+  ON public.project_versions FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage project_objectives"
+  ON public.project_objectives FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage project_activities"
+  ON public.project_activities FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage project_indicators"
+  ON public.project_indicators FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage budget_lines"
+  ON public.budget_lines FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage expenses"
+  ON public.expenses FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage requirements"
+  ON public.requirements FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage project_incidents"
+  ON public.project_incidents FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users can manage project_deadlines"
+  ON public.project_deadlines FOR ALL
+  USING (
+    project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
+  );
+
+-- organization_documents: acceso a través de organización propia
+CREATE POLICY "Users can manage organization_documents"
+  ON public.organization_documents FOR ALL
+  USING (
+    organization_id IN (
+      SELECT id FROM public.organizations WHERE owner_id = auth.uid()
+    )
+  );
+

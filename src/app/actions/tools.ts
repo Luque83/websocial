@@ -2,43 +2,35 @@
 
 import { createClient } from '@/lib/supabase/server';
 
-
+/**
+ * Guarda datos de una herramienta en project_tools.
+ * Usa upsert nativo aprovechando la constraint UNIQUE(project_id, tool_slug).
+ */
 export async function saveToolData(projectId: string, toolSlug: string, data: unknown) {
   const supabase = await createClient();
 
-  // Manual upsert to bypass missing unique constraint in DB
-  const { data: existingRow } = await supabase
+  const { error } = await supabase
     .from('project_tools')
-    .select('id')
-    .eq('project_id', projectId)
-    .eq('tool_slug', toolSlug)
-    .maybeSingle();
-
-  let error;
-  if (existingRow) {
-    const res = await supabase
-      .from('project_tools')
-      .update({ data, updated_at: new Date().toISOString() })
-      .eq('id', existingRow.id);
-    error = res.error;
-  } else {
-    const res = await supabase
-      .from('project_tools')
-      .insert({
+    .upsert(
+      {
         project_id: projectId,
         tool_slug: toolSlug,
         data,
         updated_at: new Date().toISOString(),
-      });
-    error = res.error;
-  }
+      },
+      { onConflict: 'project_id,tool_slug' }
+    );
 
   if (error) {
     console.error('Error saving tool data:', error);
-    throw new Error(`Failed to save tool data: ${error.message}`);
+    throw new Error(`Failed to save tool data for ${toolSlug}: ${error.message}`);
   }
 }
 
+/**
+ * Obtiene datos de una herramienta de project_tools.
+ * Devuelve null si no existe el registro.
+ */
 export async function getToolData(projectId: string, toolSlug: string) {
   const supabase = await createClient();
 
@@ -47,12 +39,12 @@ export async function getToolData(projectId: string, toolSlug: string) {
     .select('data')
     .eq('project_id', projectId)
     .eq('tool_slug', toolSlug)
-    .single();
+    .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') { // PGRST116 is no rows returned
+  if (error) {
     console.error('Error getting tool data:', error);
     throw new Error('Failed to get tool data');
   }
 
-  return data?.data || null;
+  return data?.data ?? null;
 }

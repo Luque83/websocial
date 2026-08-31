@@ -1,22 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { 
-  FolderLock, 
   FileText, 
-  Upload, 
   Plus, 
-  Trash2, 
-  CheckCircle2, 
-  Calendar, 
-  ShieldCheck, 
-  AlertTriangle,
-  Download,
-  Building2,
-  ExternalLink
+  Trash2,
+  Upload,
 } from 'lucide-react';
 import type { OrganizationDocument } from '@/types/grant-lifecycle';
 import { saveOrganizationDocumentsAction } from '@/app/actions/grant-lifecycle';
+import { uploadProjectDocumentAction } from '@/app/actions/storage';
 import styles from '../personal/personal.module.css';
 
 interface DocumentVaultManagerProps {
@@ -45,54 +38,136 @@ export function DocumentVaultManager({ initialDocuments }: DocumentVaultManagerP
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<OrganizationDocument['category']>('certificado_aeat');
   const [expirationDate, setExpirationDate] = useState('');
-  const [fileName, setFileName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const handleAdd = async () => {
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleAdd = () => {
     if (!title) {
-      alert('Por favor introduce el nombre del documento');
+      showToast('Por favor introduce el nombre del documento');
       return;
     }
 
-    const newDoc: OrganizationDocument = {
-      id: `doc-${Date.now()}`,
-      title,
-      category,
-      fileName: fileName || `${title.toLowerCase().replace(/\s+/g, '_')}.pdf`,
-      fileUrl: '#',
-      fileSize: 1024000,
-      expirationDate: expirationDate || undefined,
-      isValid: true,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+    startTransition(async () => {
+      let fileUrl = '#';
+      let fileName = selectedFile?.name ?? `${title.toLowerCase().replace(/\s+/g, '_')}.pdf`;
+      let fileSize = selectedFile?.size ?? 0;
 
-    const updated = [...documents, newDoc];
-    setDocuments(updated);
-    await saveOrganizationDocumentsAction(updated);
-    setTitle('');
-    setFileName('');
-    setExpirationDate('');
-    setIsAdding(false);
+      // Subir archivo real si se ha seleccionado
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('projectId', 'org-vault');
+        formData.append('category', category);
+
+        const uploadResult = await uploadProjectDocumentAction(formData);
+        if (uploadResult.success && uploadResult.fileUrl) {
+          fileUrl = uploadResult.fileUrl;
+          fileName = uploadResult.fileName ?? fileName;
+          fileSize = uploadResult.fileSize ?? fileSize;
+        } else {
+          showToast('Error al subir el archivo. El documento se registrará sin archivo adjunto.');
+        }
+      }
+
+      const newDoc: OrganizationDocument = {
+        id: crypto.randomUUID(),
+        title,
+        category,
+        fileName,
+        fileUrl,
+        fileSize,
+        expirationDate: expirationDate || undefined,
+        isValid: true,
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+
+      const updated = [...documents, newDoc];
+      setDocuments(updated);
+      await saveOrganizationDocumentsAction(updated);
+      setTitle('');
+      setSelectedFile(null);
+      setExpirationDate('');
+      setIsAdding(false);
+      showToast('Documento guardado en la bóveda correctamente');
+    });
   };
 
-  const handleDelete = async (docId: string) => {
-    if (confirm('¿Eliminar este documento de la bóveda?')) {
+  const handleDeleteConfirm = (docId: string) => {
+    startTransition(async () => {
       const updated = documents.filter(d => d.id !== docId);
       setDocuments(updated);
       await saveOrganizationDocumentsAction(updated);
-    }
+      setDeleteConfirmId(null);
+      showToast('Documento eliminado');
+    });
   };
 
   return (
     <div className={styles.container}>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '24px', right: '24px',
+          background: '#0D3A5F', color: 'white',
+          padding: '0.85rem 1.5rem', borderRadius: '10px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          zIndex: 9999, fontSize: '0.875rem', fontWeight: 700,
+          border: '1.5px solid #16C7B2'
+        }}>
+          {toast}
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación */}
+      {deleteConfirmId && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '2rem',
+            maxWidth: '420px', width: '90%', boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+          }}>
+            <h3 style={{ margin: '0 0 0.75rem 0', color: '#0D3A5F' }}>¿Eliminar documento?</h3>
+            <p style={{ color: '#64748B', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+              Esta acción eliminará el documento de la bóveda. Esta operación no se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmId(null)}
+                className={styles.btnSecondary}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteConfirm(deleteConfirmId)}
+                disabled={isPending}
+                style={{ background: '#DC2626', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {isPending ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Bóveda Documental de la Entidad</h1>
           <p className={styles.subtitle}>
-            Repositorio centralizado de documentación corporativa (Estatutos, CIF, Certificados AEAT/TGSS, Poderes). Se reutilizan automáticamente en todos tus proyectos sin duplicar archivos.
+            Repositorio centralizado de documentación corporativa. Los documentos se reutilizan automáticamente en todos tus proyectos.
           </p>
         </div>
-
         <button
           type="button"
           onClick={() => setIsAdding(true)}
@@ -110,7 +185,7 @@ export function DocumentVaultManager({ initialDocuments }: DocumentVaultManagerP
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
             <input
               type="text"
-              placeholder="Título (ej. Certificado de estar al corriente AEAT)..."
+              placeholder="Título del documento..."
               className={styles.input}
               value={title}
               onChange={e => setTitle(e.target.value)}
@@ -126,18 +201,34 @@ export function DocumentVaultManager({ initialDocuments }: DocumentVaultManagerP
             </select>
             <input
               type="date"
-              placeholder="Fecha de caducidad..."
+              placeholder="Fecha de caducidad (opcional)..."
               className={styles.input}
               value={expirationDate}
               onChange={e => setExpirationDate(e.target.value)}
             />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#0D3A5F', marginBottom: '0.35rem' }}>
+                Archivo del documento (PDF, imagen):
+              </label>
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                className={styles.input}
+                onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+              />
+              {selectedFile && (
+                <div style={{ fontSize: '0.75rem', color: '#16A34A', marginTop: '0.25rem' }}>
+                  ✓ {selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-            <button type="button" onClick={() => setIsAdding(false)} className={styles.btnSecondary} style={{ background: '#e2e8f0', color: '#334155' }}>
+            <button type="button" onClick={() => { setIsAdding(false); setSelectedFile(null); }} className={styles.btnSecondary} style={{ background: '#e2e8f0', color: '#334155' }}>
               Cancelar
             </button>
-            <button type="button" onClick={handleAdd} className={styles.btnPrimary}>
-              Guardar en Bóveda
+            <button type="button" onClick={handleAdd} className={styles.btnPrimary} disabled={isPending}>
+              <Upload size={14} /> {isPending ? 'Guardando...' : 'Guardar en Bóveda'}
             </button>
           </div>
         </div>
@@ -158,6 +249,13 @@ export function DocumentVaultManager({ initialDocuments }: DocumentVaultManagerP
               </tr>
             </thead>
             <tbody>
+              {documents.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', fontSize: '0.875rem' }}>
+                    La bóveda está vacía. Sube el primer documento corporativo.
+                  </td>
+                </tr>
+              )}
               {documents.map(doc => {
                 const isExpiring = doc.expirationDate && new Date(doc.expirationDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                 const isExpired = doc.expirationDate && new Date(doc.expirationDate) < new Date();
@@ -206,7 +304,7 @@ export function DocumentVaultManager({ initialDocuments }: DocumentVaultManagerP
                     <td>
                       <button
                         type="button"
-                        onClick={() => handleDelete(doc.id)}
+                        onClick={() => setDeleteConfirmId(doc.id)}
                         className={styles.deleteBtn}
                       >
                         <Trash2 size={16} />

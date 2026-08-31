@@ -490,3 +490,31 @@ export async function getGlobalDeadlinesAction(): Promise<DeadlineItem[]> {
     return [];
   }
 }
+
+/**
+ * 8. Guarda el Calendario Unificado de Plazos y Alertas de la Entidad
+ */
+export async function saveGlobalDeadlinesAction(deadlines: DeadlineItem[]): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { success: false, error: 'No autenticado' };
+
+    await saveToolData('00000000-0000-0000-0000-000000000000', 'global-deadlines', {
+      deadlines,
+      updatedAt: new Date().toISOString(),
+    });
+
+    revalidatePath('/dashboard/plazos');
+    revalidatePath('/dashboard');
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    console.error('Error saving global deadlines:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Error guardando plazos',
+    };
+  }
+}
+

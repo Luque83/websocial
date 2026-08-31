@@ -47,6 +47,7 @@ import { uploadProjectDocumentAction } from '@/app/actions/storage';
 import { getOrgStaffCatalogAction, getGlobalImputationMatrixAction } from '@/app/actions/personal';
 import { GlobalImputationMatrix } from '@/app/(dashboard)/dashboard/matriz-imputacion/GlobalImputationMatrix';
 import { DEFAULT_STAFF_CATALOG, DEFAULT_CATEGORY_PROFILES, type Worker as OrgWorker, type EstimatedCategoryProfile } from '@/config/staff';
+import { calcularCosteEmpresa } from '@/lib/cost-calculator';
 import type { ConvocatoriaAnalysisResult } from '@/lib/ai/callAnalyzer';
 import { GrantLifecycleNav, type LifecyclePhase } from '@/components/project/GrantLifecycleNav';
 import { TramitacionTab } from '@/components/project/tabs/TramitacionTab';
@@ -527,17 +528,20 @@ export function ProjectWorkspace({
   const updatePersonalAndBudget = (newPersonal: ProjectWorkspaceData['personal']) => {
     setPersonal(newPersonal);
     const newPersonalPartidas = newPersonal.map(worker => {
-      const costeEmpresaMes = worker.monthlySalary * (1 + (worker.ssPct || 31.4) / 100);
+      const { costeEmpresaMes } = calcularCosteEmpresa(worker.monthlySalary, 12, worker.ssPct || 31.4);
       const maxH = worker.maxWeeklyHours || 37.5;
       const pct = maxH > 0 ? (worker.weeklyHours / maxH) : 1;
       const costeMesImputado = Number((costeEmpresaMes * pct).toFixed(2));
-      const totalCoste = Number((costeMesImputado * (worker.months || 12)).toFixed(2));
+      const activeMonthsCount = (worker.activeMonths && worker.activeMonths.length > 0)
+        ? worker.activeMonths.length
+        : (worker.months || 12);
+      const totalCoste = Number((costeMesImputado * activeMonthsCount).toFixed(2));
       return {
         id: `p-${worker.id}`,
         category: 'personal',
-        description: `${worker.name || 'Técnico/a'} (${worker.role} - ${worker.weeklyHours}h/sem)`,
+        description: `${worker.name || 'Técnico/a'} (${worker.role} - ${worker.weeklyHours}h/sem, ${activeMonthsCount} meses)`,
         monthlyAmount: costeMesImputado,
-        months: worker.months || 12,
+        months: activeMonthsCount,
         costeReal: totalCoste,
         workerId: worker.id,
       };
@@ -2766,6 +2770,8 @@ export function ProjectWorkspace({
             }}
             partidasPresupuesto={presupuesto.partidas}
             subvencionConcedida={subvencion.importeConcedido || 0}
+            projectId={projectId}
+            projectName={initialProject.name || 'Proyecto Subvencionado'}
           />
         </div>
       )}
@@ -2895,7 +2901,10 @@ export function ProjectWorkspace({
                 </thead>
                 <tbody>
                   {personal.map((worker, wIdx) => {
-                    const activeMonthsCount = worker.months || 12;
+                    const currentActive = worker.activeMonths && worker.activeMonths.length > 0
+                      ? worker.activeMonths
+                      : Array.from({ length: worker.months || 12 }, (_, i) => i + 1);
+                    const activeMonthsCount = currentActive.length;
 
                     return (
                       <tr key={worker.id}>
@@ -2907,43 +2916,45 @@ export function ProjectWorkspace({
                           <span style={{ fontWeight: 800, color: '#0D3A5F' }}>{worker.weeklyHours} h/sem</span>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <input
-                            type="number"
-                            min="1"
-                            max={cronograma.durationMonths || 12}
-                            className={styles.input}
-                            style={{ width: '55px', textAlign: 'center', fontWeight: 800 }}
-                            value={activeMonthsCount}
-                            onChange={e => {
-                              const newM = Math.max(1, Math.min(cronograma.durationMonths || 12, parseInt(e.target.value) || 1));
-                              const newP = [...personal];
-                              newP[wIdx].months = newM;
-                              updatePersonalAndBudget(newP);
-                            }}
-                          />
+                          <span style={{
+                            background: '#EFF6FF',
+                            color: '#1D4ED8',
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '6px',
+                            fontWeight: 800,
+                            fontSize: '0.8125rem'
+                          }}>
+                            {activeMonthsCount} meses
+                          </span>
                         </td>
                         {Array.from({ length: cronograma.durationMonths || 12 }, (_, mIdx) => {
                           const monthNum = mIdx + 1;
-                          const isActive = monthNum <= activeMonthsCount;
+                          const isActive = currentActive.includes(monthNum);
                           return (
                             <td
                               key={mIdx}
                               onClick={() => {
+                                const newActive = isActive
+                                  ? currentActive.filter((m: number) => m !== monthNum)
+                                  : [...currentActive, monthNum].sort((a: number, b: number) => a - b);
                                 const newP = [...personal];
-                                newP[wIdx].months = monthNum;
+                                newP[wIdx].activeMonths = newActive;
+                                newP[wIdx].months = newActive.length;
                                 updatePersonalAndBudget(newP);
                               }}
                               style={{
-                                background: isActive ? '#10B981' : 'transparent',
+                                background: isActive ? '#10B981' : '#F1F5F9',
+                                border: `1px solid ${isActive ? '#059669' : '#E2E8F0'}`,
                                 cursor: 'pointer',
                                 textAlign: 'center',
-                                color: isActive ? 'white' : 'transparent',
-                                fontWeight: 700,
-                                userSelect: 'none'
+                                color: isActive ? 'white' : '#94A3B8',
+                                fontWeight: 800,
+                                userSelect: 'none',
+                                transition: 'all 0.15s ease'
                               }}
-                              title={`Imputar hasta el Mes ${monthNum} (${monthNum} meses)`}
+                              title={isActive ? `Mes ${monthNum}: Imputado (click para desmarcar)` : `Mes ${monthNum}: No imputado (click para activar)`}
                             >
-                              {isActive ? '✓' : ''}
+                              {isActive ? '✓' : '·'}
                             </td>
                           );
                         })}

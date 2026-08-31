@@ -36,6 +36,7 @@ import { useRouter } from 'next/navigation';
 import type { Worker, ProjectAllocation } from '@/config/staff';
 import type { WorkerProjectLifecycle } from '@/app/actions/personal';
 import { savePersonalMatrixAction } from '@/app/actions/personal';
+import { calcularCosteEmpresa, calcularImporteImputado } from '@/lib/cost-calculator';
 import styles from './matriz.module.css';
 
 interface GlobalImputationMatrixProps {
@@ -55,7 +56,7 @@ interface GlobalImputationMatrixProps {
   onClose?: () => void;
 }
 
-export type ViewMode = 'visual_bars' | 'interactive_editor' | 'matrix360' | 'auditor';
+export type ViewMode = 'monthly_grid' | 'visual_bars' | 'interactive_editor' | 'matrix360' | 'auditor';
 
 // Paleta de colores consistente y accesible para los proyectos
 export const PROJECT_COLORS = [
@@ -77,6 +78,9 @@ export function getProjectTheme(projectId?: string, projectIndex: number = 0) {
   return PROJECT_COLORS[Math.abs(projectIndex) % (PROJECT_COLORS.length - 1)];
 }
 
+const MONTH_NAMES_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MONTH_NAMES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
 export function GlobalImputationMatrix({
   initialWorkers,
   projects,
@@ -86,10 +90,21 @@ export function GlobalImputationMatrix({
   onClose,
 }: GlobalImputationMatrixProps) {
   const router = useRouter();
-  const [activeMode, setActiveMode] = useState<ViewMode>('visual_bars');
+  const [activeMode, setActiveMode] = useState<ViewMode>('monthly_grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'alert' | 'ok' | 'free'>('all');
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+
+  // Estado para modal de sustituciones
+  const [isSubstitutionModalOpen, setIsSubstitutionModalOpen] = useState(false);
+  const [subProject, setSubProject] = useState(projects[0]?.id || '');
+  const [subWorkerA, setSubWorkerA] = useState('');
+  const [subWorkerB, setSubWorkerB] = useState('');
+  const [subMonthsAStart, setSubMonthsAStart] = useState(1);
+  const [subMonthsAEnd, setSubMonthsAEnd] = useState(6);
+  const [subMonthsBStart, setSubMonthsBStart] = useState(7);
+  const [subMonthsBEnd, setSubMonthsBEnd] = useState(12);
+  const [subHours, setSubHours] = useState(15);
 
   // Workers state with allocations
   const [workers, setWorkers] = useState<Worker[]>(() => {
@@ -165,7 +180,6 @@ export function GlobalImputationMatrix({
     handleHourChange(workerIdx, projectTargetId, computedHours);
   };
 
-  // Handler for months of duration change
   const handleMonthsChange = (workerIdx: number, projectTargetId: string | undefined, months: number) => {
     if (!projectTargetId) return;
     const updated = [...workers];
@@ -174,6 +188,8 @@ export function GlobalImputationMatrix({
 
     if (allocIdx >= 0) {
       targetWorker.allocations[allocIdx].months = Math.max(1, Math.min(24, months));
+      // Reset active months to match new duration contiguous from Jan
+      targetWorker.allocations[allocIdx].activeMonths = Array.from({length: targetWorker.allocations[allocIdx].months}, (_, i) => i + 1);
     } else {
       targetWorker.allocations.push({
         id: `alloc-${targetWorker.id}-${projectTargetId}`,
@@ -181,10 +197,101 @@ export function GlobalImputationMatrix({
         projectName: projects.find(p => p.id === projectTargetId)?.name || 'Proyecto',
         weeklyHours: 0,
         months: Math.max(1, Math.min(24, months)),
+        activeMonths: Array.from({length: Math.max(1, Math.min(24, months))}, (_, i) => i + 1)
       });
     }
 
     setWorkers(updated);
+  };
+
+  const handleActiveMonthToggle = (workerIdx: number, projectTargetId: string | undefined, monthNum: number) => {
+    if (!projectTargetId) return;
+    const updated = [...workers];
+    const targetWorker = updated[workerIdx];
+    const allocIdx = targetWorker.allocations.findIndex(a => a.projectId === projectTargetId);
+
+    if (allocIdx >= 0) {
+      const alloc = targetWorker.allocations[allocIdx];
+      let currentActive = alloc.activeMonths || Array.from({length: alloc.months || 12}, (_, i) => i + 1);
+      
+      if (currentActive.includes(monthNum)) {
+        currentActive = currentActive.filter(m => m !== monthNum);
+      } else {
+        currentActive = [...currentActive, monthNum].sort((a, b) => a - b);
+      }
+      
+      alloc.activeMonths = currentActive;
+      alloc.months = currentActive.length; // Sync months with active count
+      setWorkers(updated);
+    }
+  };
+
+  const handleApplySubstitution = () => {
+    if (!subProject || !subWorkerA || !subWorkerB) {
+      showToast('Selecciona el proyecto y los dos trabajadores a sustituir.');
+      return;
+    }
+    if (subWorkerA === subWorkerB) {
+      showToast('El trabajador saliente y entrante deben ser diferentes.');
+      return;
+    }
+
+    const monthsA = Array.from({ length: subMonthsAEnd - subMonthsAStart + 1 }, (_, i) => subMonthsAStart + i);
+    const monthsB = Array.from({ length: subMonthsBEnd - subMonthsBStart + 1 }, (_, i) => subMonthsBStart + i);
+    const projName = projects.find(p => p.id === subProject)?.name || 'Proyecto';
+
+    setWorkers(prev => prev.map(w => {
+      if (w.id === subWorkerA) {
+        const allocs = [...(w.allocations || [])];
+        const aIdx = allocs.findIndex(a => a.projectId === subProject);
+        if (aIdx >= 0) {
+          allocs[aIdx] = {
+            ...allocs[aIdx],
+            weeklyHours: subHours || allocs[aIdx].weeklyHours || 15,
+            months: monthsA.length,
+            activeMonths: monthsA,
+          };
+        } else {
+          allocs.push({
+            id: `alloc-${w.id}-${subProject}`,
+            projectId: subProject,
+            projectName: projName,
+            weeklyHours: subHours || 15,
+            months: monthsA.length,
+            activeMonths: monthsA,
+          });
+        }
+        return { ...w, allocations: allocs };
+      }
+
+      if (w.id === subWorkerB) {
+        const allocs = [...(w.allocations || [])];
+        const aIdx = allocs.findIndex(a => a.projectId === subProject);
+        if (aIdx >= 0) {
+          allocs[aIdx] = {
+            ...allocs[aIdx],
+            weeklyHours: subHours || allocs[aIdx].weeklyHours || 15,
+            months: monthsB.length,
+            activeMonths: monthsB,
+          };
+        } else {
+          allocs.push({
+            id: `alloc-${w.id}-${subProject}`,
+            projectId: subProject,
+            projectName: projName,
+            weeklyHours: subHours || 15,
+            months: monthsB.length,
+            activeMonths: monthsB,
+          });
+        }
+        return { ...w, allocations: allocs };
+      }
+
+      return w;
+    }));
+
+    setIsSubstitutionModalOpen(false);
+    showToast(`¡Sustitución configurada! Meses ${subMonthsAStart}-${subMonthsAEnd} asignados a titular y meses ${subMonthsBStart}-${subMonthsBEnd} a sustituto/a. Pulsa "Sincronizar con Proyectos" para persistir.`);
   };
 
   const handleSaveAndSync = async () => {
@@ -391,15 +498,191 @@ export function GlobalImputationMatrix({
         </div>
       </div>
 
+      {/* Modal Asistente de Sustituciones */}
+      {isSubstitutionModalOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem', backdropFilter: 'blur(3px)'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '2rem',
+            maxWidth: '560px', width: '100%', boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+            border: '1px solid #E2E8F0', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ background: '#EFF6FF', padding: '0.5rem', borderRadius: '8px' }}>
+                  <Users size={20} color="#2563EB" />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, color: '#0D3A5F' }}>
+                  Asistente de Sustitución de Personal
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSubstitutionModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.875rem', color: '#64748B', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+              Configura el relevo o sustitución de un trabajador por otro en un proyecto para un tramo de meses determinado (ej. baja maternal, cambio de técnico o fin de contrato).
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#0D3A5F', marginBottom: '0.35rem' }}>
+                  1. Proyecto / Subvención de destino:
+                </label>
+                <select
+                  className={styles.select}
+                  value={subProject}
+                  onChange={e => setSubProject(e.target.value)}
+                  style={{ width: '100%' }}
+                >
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ background: '#F8FAFC', padding: '1rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#1E40AF', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                    👤 Trabajador Titular (Saliente)
+                  </label>
+                  <select
+                    className={styles.select}
+                    value={subWorkerA}
+                    onChange={e => setSubWorkerA(e.target.value)}
+                    style={{ width: '100%', marginBottom: '0.6rem' }}
+                  >
+                    <option value="">Selecciona trabajador...</option>
+                    {workers.map(w => (
+                      <option key={w.id} value={w.id}>{w.name} ({w.role})</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '0.3rem' }}>Meses Activo:</div>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <select
+                      className={styles.select}
+                      value={subMonthsAStart}
+                      onChange={e => setSubMonthsAStart(parseInt(e.target.value))}
+                    >
+                      {MONTH_NAMES_SHORT.map((m, i) => (
+                        <option key={i + 1} value={i + 1}>{m}</option>
+                      ))}
+                    </select>
+                    <span>a</span>
+                    <select
+                      className={styles.select}
+                      value={subMonthsAEnd}
+                      onChange={e => setSubMonthsAEnd(parseInt(e.target.value))}
+                    >
+                      {MONTH_NAMES_SHORT.map((m, i) => (
+                        <option key={i + 1} value={i + 1}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ background: '#F0FDF4', padding: '1rem', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#166534', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                    👤 Trabajador Sustituto (Entrante)
+                  </label>
+                  <select
+                    className={styles.select}
+                    value={subWorkerB}
+                    onChange={e => setSubWorkerB(e.target.value)}
+                    style={{ width: '100%', marginBottom: '0.6rem' }}
+                  >
+                    <option value="">Selecciona sustituto...</option>
+                    {workers.map(w => (
+                      <option key={w.id} value={w.id}>{w.name} ({w.role})</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '0.3rem' }}>Meses Activo:</div>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <select
+                      className={styles.select}
+                      value={subMonthsBStart}
+                      onChange={e => setSubMonthsBStart(parseInt(e.target.value))}
+                    >
+                      {MONTH_NAMES_SHORT.map((m, i) => (
+                        <option key={i + 1} value={i + 1}>{m}</option>
+                      ))}
+                    </select>
+                    <span>a</span>
+                    <select
+                      className={styles.select}
+                      value={subMonthsBEnd}
+                      onChange={e => setSubMonthsBEnd(parseInt(e.target.value))}
+                    >
+                      {MONTH_NAMES_SHORT.map((m, i) => (
+                        <option key={i + 1} value={i + 1}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#0D3A5F', marginBottom: '0.35rem' }}>
+                  Dedicación horaria de la sustitución (h/semana):
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="40"
+                  step="0.5"
+                  className={styles.input}
+                  value={subHours}
+                  onChange={e => setSubHours(parseFloat(e.target.value) || 15)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsSubstitutionModalOpen(false)}
+                  className={styles.btnSecondary}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplySubstitution}
+                  className={styles.btnPrimary}
+                >
+                  Aplicar Sustitución en Matriz
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Mode Navigation Bar */}
       <nav className={styles.modeNav}>
+        <button
+          type="button"
+          onClick={() => setActiveMode('monthly_grid')}
+          className={`${styles.modeBtn} ${activeMode === 'monthly_grid' ? styles.modeBtnActive : ''}`}
+        >
+          <Calendar size={17} color="#2563EB" />
+          <span>1. 📅 Matriz Mensual 12 Meses (Ene-Dic & Sustituciones)</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveMode('visual_bars')}
           className={`${styles.modeBtn} ${activeMode === 'visual_bars' ? styles.modeBtnActive : ''}`}
         >
-          <Layers size={17} color="#2563EB" />
-          <span>1. 🎨 Mapa Visual de Imputación (Barras por Proyecto)</span>
+          <Layers size={17} color="#0D9488" />
+          <span>2. 🎨 Mapa Visual (Barras por Proyecto)</span>
         </button>
 
         <button
@@ -408,7 +691,7 @@ export function GlobalImputationMatrix({
           className={`${styles.modeBtn} ${activeMode === 'interactive_editor' ? styles.modeBtnActive : ''}`}
         >
           <SlidersHorizontal size={17} color="#10B981" />
-          <span>2. ⚡ Asignador de Porcentajes por Trabajador</span>
+          <span>3. ⚡ Asignador Rápido por Trabajador</span>
         </button>
 
         <button
@@ -417,7 +700,7 @@ export function GlobalImputationMatrix({
           className={`${styles.modeBtn} ${activeMode === 'matrix360' ? styles.modeBtnActive : ''}`}
         >
           <FileSpreadsheet size={17} color="#7C3AED" />
-          <span>3. 📋 Matriz Cuadriculada (Fases 1-4 & Nóminas)</span>
+          <span>4. 📋 Matriz Cuadriculada (Fases & Nóminas)</span>
         </button>
 
         <button
@@ -426,12 +709,327 @@ export function GlobalImputationMatrix({
           className={`${styles.modeBtn} ${activeMode === 'auditor' ? styles.modeBtnActive : ''}`}
         >
           <ShieldCheck size={17} color={overAllocatedWorkers.length > 0 ? '#DC2626' : '#16A34A'} />
-          <span>4. 🛡️ Auditor Antifraude de Jornada</span>
+          <span>5. 🛡️ Auditor Antifraude de Jornada</span>
         </button>
       </nav>
 
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      {/* PESTAÑA 1: MAPA VISUAL DE IMPUTACIÓN (STACKED BARS CON COLORES)          */}
+      {/* PESTAÑA 1 (HERO): MATRIZ MENSUAL CALENDARIO (12 MESES: ENE-DIC)           */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'monthly_grid' && (
+        <div className={styles.monthlyGridCard}>
+          {/* Header & Controls */}
+          <div className={styles.matrixHeader}>
+            <div>
+              <h2 className={styles.matrixTitle}>
+                <Calendar size={22} color="#2563EB" />
+                <span>Matriz Mensualizada de Imputaciones (Enero - Diciembre)</span>
+              </h2>
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: '#64748B' }}>
+                Control mes a mes de porcentajes de dedicación e importes de cada trabajador en sus proyectos. Permite <strong>bajas, sustituciones y cambios de jornada</strong> en meses específicos con sincronización bidireccional inmediata.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setIsSubstitutionModalOpen(true)}
+                className={styles.btnSecondary}
+                style={{ background: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE', fontWeight: 800 }}
+              >
+                <Users size={15} /> ⚡ Asistente de Sustituciones
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAndSync}
+                disabled={isSaving}
+                className={styles.btnPrimary}
+              >
+                <Save size={15} /> {isSaving ? 'Guardando...' : 'Guardar y Sincronizar'}
+              </button>
+            </div>
+          </div>
+
+          {/* Project Color Legend */}
+          <div className={styles.legendContainer} style={{ marginBottom: '1.25rem' }}>
+            <div className={styles.legendGrid}>
+              {allProjectItems.map((p, pIdx) => {
+                const theme = getProjectTheme(p.id, pIdx);
+                const totalHoursInProj = workers.reduce((s, w) => {
+                  const alloc = w.allocations.find(a => a.projectId === p.id);
+                  return s + (alloc?.weeklyHours || 0);
+                }, 0);
+
+                return (
+                  <div 
+                    key={p.id} 
+                    className={styles.legendBadge}
+                    style={{ 
+                      background: theme.light, 
+                      borderColor: theme.border,
+                      color: '#0D3A5F'
+                    }}
+                  >
+                    <span className={styles.legendColorDot} style={{ background: theme.bg }} />
+                    <strong>{p.name.length > 24 ? `${p.name.slice(0, 22)}...` : p.name}</strong>
+                    <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>
+                      ({totalHoursInProj.toFixed(1)}h/sem)
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className={styles.filterBar}>
+            <div className={styles.filterGroup}>
+              <input
+                type="text"
+                placeholder="🔍 Filtrar trabajador o puesto..."
+                className={styles.searchInput}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <select
+                className={styles.selectFilter}
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as any)}
+              >
+                <option value="all">Todos los estados ({workers.length})</option>
+                <option value="alert">⚠️ Con Sobrededicación ({overAllocatedWorkers.length})</option>
+                <option value="free">🟢 Con Horas Disponibles ({workersWithFreeCapacity.length})</option>
+                <option value="ok">✓ 100% Asignados</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 12-Month Table Grid */}
+          <div className={styles.tableWrapper}>
+            <table className={styles.monthlyTable}>
+              <thead>
+                <tr>
+                  <th className={styles.stickyWorkerCol} style={{ width: '220px' }}>
+                    Trabajador / Capacidad
+                  </th>
+                  {MONTH_NAMES_SHORT.map((mShort, mIdx) => (
+                    <th key={mIdx} className={styles.monthColHeader} style={{ minWidth: '130px' }}>
+                      <div>{mShort}</div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94A3B8' }}>Mes {mIdx + 1}</div>
+                    </th>
+                  ))}
+                  <th style={{ minWidth: '130px', textAlign: 'center' }}>
+                    Resumen Anual
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredWorkers.map((worker) => {
+                  const realWorkerIdx = workers.findIndex(w => w.id === worker.id);
+                  const maxH = worker.maxWeeklyHours || 37.5;
+                  const { costeEmpresaMes } = calcularCosteEmpresa(worker.salaryMonthly, worker.pagas || 12, worker.ssPct || 31.4);
+
+                  let annualTotalCost = 0;
+                  let annualTotalHours = 0;
+
+                  return (
+                    <tr key={worker.id}>
+                      {/* Sticky Worker Column */}
+                      <td className={styles.stickyWorkerCol}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                          <div className={styles.workerAvatar} style={{ width: '32px', height: '32px', fontSize: '0.75rem', flexShrink: 0 }}>
+                            {worker.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                          </div>
+                          <div>
+                            <strong style={{ color: '#0D3A5F', fontSize: '0.875rem', display: 'block' }}>
+                              {worker.name || 'Sin nombre'}
+                            </strong>
+                            <div style={{ fontSize: '0.71875rem', color: '#64748B' }}>{worker.role}</div>
+                            <div style={{ fontSize: '0.6875rem', color: '#0D3A5F', fontWeight: 700, marginTop: '2px' }}>
+                              {formatCurrency(worker.salaryMonthly)}/m · {maxH}h/sem
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 12 Months Columns (Ene .. Dic) */}
+                      {MONTH_NAMES_SHORT.map((_, mIdx) => {
+                        const monthNum = mIdx + 1;
+                        
+                        const activeAllocsInMonth = (worker.allocations || []).filter(alloc => {
+                          if (!alloc || alloc.weeklyHours <= 0) return false;
+                          const activeArr = alloc.activeMonths && alloc.activeMonths.length > 0
+                            ? alloc.activeMonths
+                            : Array.from({ length: alloc.months || 12 }, (_, i) => i + 1);
+                          return activeArr.includes(monthNum);
+                        });
+
+                        const totalMonthHours = activeAllocsInMonth.reduce((s, a) => s + (a.weeklyHours || 0), 0);
+                        const totalMonthPct = maxH > 0 ? (totalMonthHours / maxH) * 100 : 0;
+                        const isMonthOver = totalMonthPct > 100.01;
+                        const monthCost = calcularImporteImputado(costeEmpresaMes, totalMonthHours, maxH);
+
+                        annualTotalHours += totalMonthHours;
+                        annualTotalCost += monthCost;
+
+                        return (
+                          <td key={monthNum} className={styles.monthCell}>
+                            <div className={styles.monthCellContainer}>
+                              {/* List of project pills in this month */}
+                              <div className={styles.monthPillsList}>
+                                {activeAllocsInMonth.map((alloc) => {
+                                  const pIdx = projects.findIndex(p => p.id === alloc.projectId);
+                                  const theme = getProjectTheme(alloc.projectId, pIdx >= 0 ? pIdx : 0);
+                                  const pct = maxH > 0 ? (alloc.weeklyHours / maxH) * 100 : 0;
+                                  const costInM = calcularImporteImputado(costeEmpresaMes, alloc.weeklyHours, maxH);
+
+                                  return (
+                                    <div
+                                      key={alloc.id}
+                                      className={styles.monthProjectPill}
+                                      style={{
+                                        background: theme.light,
+                                        borderColor: theme.border,
+                                        color: '#0D3A5F'
+                                      }}
+                                      title={`${alloc.projectName}: ${pct.toFixed(0)}% jornada (${alloc.weeklyHours} h/sem · ${formatCurrency(costInM)}/mes)`}
+                                    >
+                                      <div className={styles.monthPillLeft}>
+                                        <span className={styles.monthPillPct} style={{ color: theme.bg }}>
+                                          {pct.toFixed(0)}%
+                                        </span>
+                                        <span className={styles.monthPillName}>
+                                          {alloc.projectName}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleActiveMonthToggle(realWorkerIdx, alloc.projectId, monthNum)}
+                                        className={styles.monthPillToggle}
+                                        title={`Desasignar de ${alloc.projectName} en Mes ${monthNum}`}
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+
+                                {activeAllocsInMonth.length === 0 && (
+                                  <div style={{ fontSize: '0.6875rem', color: '#94A3B8', textAlign: 'center', padding: '0.35rem 0' }}>
+                                    Sin imputación
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Monthly Total Pill */}
+                              {isMonthOver ? (
+                                <div className={`${styles.monthTotalPill} ${styles.monthTotalPillAlert}`} title={`¡Sobrededicación en Mes ${monthNum}! Supera el 100% de la jornada`}>
+                                  <span>⚠️ {totalMonthPct.toFixed(0)}%</span>
+                                  <span>{totalMonthHours.toFixed(1)}h</span>
+                                </div>
+                              ) : totalMonthPct > 0 ? (
+                                <div className={`${styles.monthTotalPill} ${styles.monthTotalPillOk}`} title={`Ocupación Mes ${monthNum}: ${totalMonthPct.toFixed(0)}% (${totalMonthHours.toFixed(1)} h/sem · ${formatCurrency(monthCost)})`}>
+                                  <span>{totalMonthPct.toFixed(0)}% JOR</span>
+                                  <span>{totalMonthHours.toFixed(1)}h</span>
+                                </div>
+                              ) : (
+                                <div className={`${styles.monthTotalPill} ${styles.monthTotalPillEmpty}`}>
+                                  0% (Disp.)
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+
+                      {/* Annual Summary Column */}
+                      <td style={{ textAlign: 'center', background: '#F8FAFC' }}>
+                        <div style={{ fontWeight: 800, color: '#0D3A5F', fontSize: '0.9375rem' }}>
+                          {formatCurrency(annualTotalCost)}
+                        </div>
+                        <div style={{ fontSize: '0.6875rem', color: '#64748B', marginTop: '2px' }}>
+                          Coste Imputado Año
+                        </div>
+                        <div style={{ marginTop: '0.35rem' }}>
+                          <span style={{
+                            fontSize: '0.6875rem',
+                            fontWeight: 800,
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '9999px',
+                            background: annualTotalHours > 0 ? '#DCFCE7' : '#F1F5F9',
+                            color: annualTotalHours > 0 ? '#166534' : '#94A3B8',
+                          }}>
+                            {annualTotalHours > 0 ? `${(annualTotalHours / 12).toFixed(1)}h med/mes` : 'Sin horas'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+
+              {/* Table Footer: Totales Globales de la Entidad Mes a Mes */}
+              <tfoot>
+                <tr className={styles.monthFooterRow}>
+                  <td className={styles.stickyWorkerCol}>
+                    <strong>TOTAL ENTIDAD / MES</strong>
+                    <div style={{ fontSize: '0.6875rem', color: '#64748B', fontWeight: 600 }}>Ocupación de Plantilla</div>
+                  </td>
+                  {MONTH_NAMES_SHORT.map((_, mIdx) => {
+                    const monthNum = mIdx + 1;
+                    let mHours = 0;
+                    let mCost = 0;
+
+                    workers.forEach(w => {
+                      const maxH = w.maxWeeklyHours || 37.5;
+                      const { costeEmpresaMes } = calcularCosteEmpresa(w.salaryMonthly, w.pagas || 12, w.ssPct || 31.4);
+                      (w.allocations || []).forEach(alloc => {
+                        if (alloc.weeklyHours > 0) {
+                          const activeArr = alloc.activeMonths && alloc.activeMonths.length > 0
+                            ? alloc.activeMonths
+                            : Array.from({ length: alloc.months || 12 }, (_, i) => i + 1);
+                          if (activeArr.includes(monthNum)) {
+                            mHours += alloc.weeklyHours;
+                            mCost += calcularImporteImputado(costeEmpresaMes, alloc.weeklyHours, maxH);
+                          }
+                        }
+                      });
+                    });
+
+                    const occPct = totalAvailableHours > 0 ? Math.round((mHours / totalAvailableHours) * 100) : 0;
+
+                    return (
+                      <td key={monthNum}>
+                        <div style={{ color: '#0D3A5F', fontSize: '0.8125rem' }}>{formatCurrency(mCost)}</div>
+                        <div style={{ fontSize: '0.6875rem', color: '#2563EB', fontWeight: 700 }}>{mHours.toFixed(1)} h/sem</div>
+                        <div style={{ fontSize: '0.6875rem', color: occPct > 100 ? '#DC2626' : '#16A34A', fontWeight: 800, marginTop: '2px' }}>
+                          {occPct}% Ocup.
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td>
+                    <div style={{ color: '#0D3A5F', fontSize: '0.875rem' }}>
+                      {formatCurrency(workers.reduce((total, w) => {
+                        const maxH = w.maxWeeklyHours || 37.5;
+                        const { costeEmpresaMes } = calcularCosteEmpresa(w.salaryMonthly, w.pagas || 12, w.ssPct || 31.4);
+                        return total + (w.allocations || []).reduce((sub, a) => {
+                          const count = (a.activeMonths && a.activeMonths.length > 0) ? a.activeMonths.length : (a.months || 12);
+                          return sub + (calcularImporteImputado(costeEmpresaMes, a.weeklyHours, maxH) * count);
+                        }, 0);
+                      }, 0))}
+                    </div>
+                    <div style={{ fontSize: '0.6875rem', color: '#64748B' }}>Total Anual Global</div>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* PESTAÑA 2: MAPA VISUAL DE IMPUTACIÓN (STACKED BARS CON COLORES)          */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'visual_bars' && (
         <div className={styles.visualCard}>
@@ -525,9 +1123,7 @@ export function GlobalImputationMatrix({
               const overHours = Math.max(0, totalAllocHours - maxH);
               const isOver = totalAllocHours > maxH;
 
-              const salMes = worker.pagas === 14 ? (worker.salaryMonthly * 14) / 12 : worker.salaryMonthly;
-              const ssMes = (salMes * (worker.ssPct || 31.4)) / 100;
-              const costeEmpresaMes = salMes + ssMes;
+              const { costeEmpresaMes } = calcularCosteEmpresa(worker.salaryMonthly, worker.pagas || 12, worker.ssPct || 31.4);
 
               // Filter allocations that have > 0 hours
               const activeAllocations = (worker.allocations || []).filter(a => (a.weeklyHours || 0) > 0);
@@ -705,9 +1301,7 @@ export function GlobalImputationMatrix({
               const overHours = Math.max(0, totalAllocHours - maxH);
               const isOver = totalAllocHours > maxH;
 
-              const salMes = worker.pagas === 14 ? (worker.salaryMonthly * 14) / 12 : worker.salaryMonthly;
-              const ssMes = (salMes * (worker.ssPct || 31.4)) / 100;
-              const costeEmpresaMes = salMes + ssMes;
+              const { costeEmpresaMes } = calcularCosteEmpresa(worker.salaryMonthly, worker.pagas || 12, worker.ssPct || 31.4);
 
               // Proyectos ya con horas asignadas
               const assignedAllocations = (worker.allocations || []).filter(a => a.weeklyHours > 0);
@@ -894,19 +1488,37 @@ export function GlobalImputationMatrix({
                                   )}
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8', fontWeight: 700 }}>Duración:</span>
-                                  {[3, 6, 9, 10, 12].map(mVal => (
-                                    <button
-                                      key={mVal}
-                                      type="button"
-                                      onClick={() => handleMonthsChange(realWorkerIdx, alloc.projectId, mVal)}
-                                      className={`${styles.quickPillBtn} ${(alloc.months || 12) === mVal ? styles.quickPillBtnActive : ''}`}
-                                      style={{ padding: '0.15rem 0.45rem', fontSize: '0.6875rem' }}
-                                    >
-                                      {mVal} meses
-                                    </button>
-                                  ))}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+                                  <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 700, marginRight: '4px', textTransform: 'uppercase' }}>Calendario:</span>
+                                  {['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map((mName, i) => {
+                                    const mNum = i + 1;
+                                    const currentActive = alloc.activeMonths || Array.from({length: alloc.months || 12}, (_, idx) => idx + 1);
+                                    const isActive = currentActive.includes(mNum);
+                                    return (
+                                      <button
+                                        key={mNum}
+                                        type="button"
+                                        onClick={() => handleActiveMonthToggle(realWorkerIdx, alloc.projectId, mNum)}
+                                        className={styles.quickPillBtn}
+                                        style={{
+                                          padding: '0',
+                                          width: '18px',
+                                          height: '18px',
+                                          fontSize: '0.65rem',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          borderRadius: '4px',
+                                          background: isActive ? '#0D3A5F' : '#F1F5F9',
+                                          color: isActive ? 'white' : '#94A3B8',
+                                          borderColor: isActive ? '#0D3A5F' : '#E2E8F0',
+                                        }}
+                                        title={`Alternar mes ${mNum}`}
+                                      >
+                                        {mName}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </div>
@@ -1285,9 +1897,7 @@ export function GlobalImputationMatrix({
               {(() => {
                 const maxH = selectedWorker.maxWeeklyHours || 37.5;
                 const totalH = (selectedWorker.allocations || []).reduce((s, a) => s + (a.weeklyHours || 0), 0);
-                const salMes = selectedWorker.pagas === 14 ? (selectedWorker.salaryMonthly * 14) / 12 : selectedWorker.salaryMonthly;
-                const ssMes = (salMes * (selectedWorker.ssPct || 31.4)) / 100;
-                const costeEmpresaMes = salMes + ssMes;
+                const { costeEmpresaMes } = calcularCosteEmpresa(selectedWorker.salaryMonthly, selectedWorker.pagas || 12, selectedWorker.ssPct || 31.4);
                 const isOver = totalH > maxH;
 
                 return (

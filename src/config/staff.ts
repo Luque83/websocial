@@ -4,6 +4,7 @@ export interface ProjectAllocation {
   projectName: string;
   weeklyHours: number;
   months: number;
+  activeMonths?: number[]; // [1, 2, 3, 4...] for Ene, Feb, Mar, etc.
 }
 
 export interface Worker {

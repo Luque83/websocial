@@ -11,6 +11,7 @@ import {
   type PersonalMatrixData, 
   type ProjectAllocation 
 } from '@/config/staff';
+import { calcularCosteEmpresa, calcularImporteImputado } from '@/lib/cost-calculator';
 
 export type { Worker, PersonalMatrixData, ProjectAllocation };
 
@@ -85,9 +86,11 @@ export async function saveOrgStaffCatalogAction(workers: Worker[]): Promise<{ su
       .eq('user_id', user.id);
 
     if (existingProjects && existingProjects.length > 0) {
-      for (const p of existingProjects) {
-        await saveToolData(p.id, 'org-staff-catalog', { workers, updatedAt: new Date().toISOString() });
-      }
+      await Promise.allSettled(
+        existingProjects.map(p =>
+          saveToolData(p.id, 'org-staff-catalog', { workers, updatedAt: new Date().toISOString() })
+        )
+      );
     } else {
       try {
         await saveToolData('00000000-0000-0000-0000-000000000000', 'org-staff-catalog', { workers, updatedAt: new Date().toISOString() });
@@ -220,7 +223,7 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
       if (wData && Array.isArray(wData.personal)) {
         wData.personal.forEach((pw: any) => {
           if (pw && pw.name && pw.name.trim() && !Array.from(allWorkersMap.values()).some(cw => isWorkerMatch(cw, pw))) {
-            const newId = pw.workerId || pw.id || `w-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+            const newId = pw.workerId || pw.id || crypto.randomUUID();
             allWorkersMap.set(newId, {
               id: newId,
               name: pw.name.trim(),
@@ -244,9 +247,7 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
     const mergedWorkers: Worker[] = fullWorkersList.map(w => {
       const existingAllocations = Array.isArray(w.allocations) ? [...w.allocations] : [];
 
-      const salMes = w.pagas === 14 ? (w.salaryMonthly * 14) / 12 : w.salaryMonthly;
-      const ssMes = (salMes * (w.ssPct || 31.4)) / 100;
-      const costeEmpresaMes = salMes + ssMes;
+      const { costeEmpresaMes, cuotaPatronal } = calcularCosteEmpresa(w.salaryMonthly, w.pagas || 12, w.ssPct || 31.4);
       const maxH = w.maxWeeklyHours || 37.5;
 
       formattedProjects.forEach((proj, projIdx) => {
@@ -283,12 +284,26 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
           }
         }
 
+        const alloc = w.allocations.find((a: any) => a.projectId === proj.id);
+        if (alloc && alloc.weeklyHours !== undefined) {
+          activeHours = alloc.weeklyHours;
+        }
+
+        const activeMonthsArray = (assignedInProj?.activeMonths && Array.isArray(assignedInProj.activeMonths) && assignedInProj.activeMonths.length > 0)
+          ? assignedInProj.activeMonths
+          : ((alloc?.activeMonths && Array.isArray(alloc.activeMonths) && alloc.activeMonths.length > 0)
+            ? alloc.activeMonths
+            : Array.from({ length: activeMonths || 12 }, (_, i) => i + 1));
+
+        activeMonths = activeMonthsArray.length;
+
         if (allocIdx >= 0) {
           existingAllocations[allocIdx] = {
             ...existingAllocations[allocIdx],
             projectName: proj.name,
             weeklyHours: activeHours,
-            months: activeMonths,
+            months: activeMonthsArray.length,
+            activeMonths: activeMonthsArray,
           };
         } else {
           existingAllocations.push({
@@ -296,7 +311,8 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
             projectId: proj.id,
             projectName: proj.name,
             weeklyHours: activeHours,
-            months: activeMonths,
+            months: activeMonthsArray.length,
+            activeMonths: activeMonthsArray,
           });
         }
 
@@ -307,7 +323,7 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
 
         const payrolls: MonthlyPayrollStatus[] = MONTH_NAMES.map((name, idx) => {
           const mNum = idx + 1;
-          const found = projectPayrolls.find(p => p.mes === mNum);
+          const found = projectPayrolls.find(p => p.mes === mNum || (p.periodoMes && p.periodoMes.endsWith(`-${mNum.toString().padStart(2, '0')}`)));
           const pct = maxH > 0 ? (activeHours / maxH) * 100 : 0;
           const imp = Number((costeEmpresaMes * (pct / 100)).toFixed(2));
 
@@ -316,7 +332,7 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
               mes: mNum,
               nombreMes: name,
               salarioBruto: found.salarioBruto || w.salaryMonthly,
-              costeSS: found.costeSS || Number(ssMes.toFixed(2)),
+              costeSS: found.costeSS || cuotaPatronal,
               pctImputado: found.pctImputado !== undefined ? found.pctImputado : pct,
               importeImputado: found.importeImputado !== undefined ? found.importeImputado : imp,
               justificantePago: !!found.justificantePago,
@@ -330,13 +346,13 @@ export async function getGlobalImputationMatrixAction(): Promise<GlobalImputatio
             mes: mNum,
             nombreMes: name,
             salarioBruto: w.salaryMonthly,
-            costeSS: Number(ssMes.toFixed(2)),
+            costeSS: cuotaPatronal,
             pctImputado: pct,
             importeImputado: imp,
-            justificantePago: mNum <= 6 && activeHours > 0, // simulación por defecto primeros 6 meses pagados
-            reciboNominaName: mNum <= 6 && activeHours > 0 ? `Nomina_${name}_${w.name.split(' ')[0]}.pdf` : undefined,
-            justificantePagoName: mNum <= 6 && activeHours > 0 ? `SEPA_Transf_${name}.pdf` : undefined,
-            rlcDocName: mNum <= 6 && activeHours > 0 ? `RLC_TGSS_${name}.pdf` : undefined,
+            justificantePago: false,
+            reciboNominaName: undefined,
+            justificantePagoName: undefined,
+            rlcDocName: undefined,
           };
         });
 
@@ -476,34 +492,42 @@ export async function savePersonalMatrixAction(
           const currentWorkspaceRaw = await getToolData(targetProjectId, 'project-workspace-full') as Record<string, unknown> | null;
           
           // 2. Construir lista de personal para el workspace
-          const updatedPersonalList = projectAssignments.map(({ worker, alloc }) => ({
-            id: `pers-${worker.id}`,
-            workerId: worker.id,
-            name: worker.name,
-            role: worker.role,
-            contractType: worker.contractType || 'Indefinido',
-            monthlySalary: worker.salaryMonthly,
-            ssPct: worker.ssPct || 31.4,
-            weeklyHours: alloc.weeklyHours,
-            maxWeeklyHours: worker.maxWeeklyHours || 37.5,
-            months: alloc.months || 12,
-          }));
+          const updatedPersonalList = projectAssignments.map(({ worker, alloc }) => {
+            const activeM = alloc.activeMonths && alloc.activeMonths.length > 0
+              ? alloc.activeMonths
+              : Array.from({ length: alloc.months || 12 }, (_, i) => i + 1);
+
+            return {
+              id: `pers-${worker.id}`,
+              workerId: worker.id,
+              name: worker.name,
+              role: worker.role,
+              contractType: worker.contractType || 'Indefinido',
+              monthlySalary: worker.salaryMonthly,
+              ssPct: worker.ssPct || 31.4,
+              weeklyHours: alloc.weeklyHours,
+              maxWeeklyHours: worker.maxWeeklyHours || 37.5,
+              months: activeM.length,
+              activeMonths: activeM,
+            };
+          });
 
           // 3. Construir partidas presupuestarias de personal
           const newPersonalPartidas = projectAssignments.map(({ worker, alloc }) => {
-            const salMes = worker.pagas === 14 ? (worker.salaryMonthly * 14) / 12 : worker.salaryMonthly;
-            const ssMes = (salMes * (worker.ssPct || 31.4)) / 100;
-            const costeEmpresaMes = salMes + ssMes;
-            const pct = (worker.maxWeeklyHours || 37.5) > 0 ? (alloc.weeklyHours / (worker.maxWeeklyHours || 37.5)) : 1;
-            const costeImputadoMes = Number((costeEmpresaMes * pct).toFixed(2));
+            const { costeEmpresaMes } = calcularCosteEmpresa(worker.salaryMonthly, worker.pagas || 12, worker.ssPct || 31.4);
+            const costeImputadoMes = calcularImporteImputado(costeEmpresaMes, alloc.weeklyHours, worker.maxWeeklyHours || 37.5);
+            const activeM = alloc.activeMonths && alloc.activeMonths.length > 0
+              ? alloc.activeMonths
+              : Array.from({ length: alloc.months || 12 }, (_, i) => i + 1);
+            const monthsCount = activeM.length;
 
             return {
               id: `p-${worker.id}`,
               category: 'personal',
-              description: `${worker.name} (${worker.role} - ${alloc.weeklyHours}h/sem)`,
+              description: `${worker.name} (${worker.role} - ${alloc.weeklyHours}h/sem, ${monthsCount} meses)`,
               monthlyAmount: costeImputadoMes,
-              months: alloc.months || 12,
-              costeReal: Number((costeImputadoMes * (alloc.months || 12)).toFixed(2)),
+              months: monthsCount,
+              costeReal: Number((costeImputadoMes * monthsCount).toFixed(2)),
               workerId: worker.id,
             };
           });

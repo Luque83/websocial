@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -9,10 +9,8 @@ import {
   FileText, 
   Receipt, 
   Eye, 
-  Check, 
   X,
-  Building2,
-  Mail
+  AlertTriangle,
 } from 'lucide-react';
 import { 
   OrganizationProfile, 
@@ -56,16 +54,23 @@ const ROLE_INFO: Record<UserRole, { label: string; class: string; icon: React.El
 export function TeamManager({ initialOrg }: TeamManagerProps) {
   const [org, setOrg] = useState(initialOrg);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('tecnico');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const handleInvite = async (e: React.FormEvent) => {
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) return;
-    setIsSubmitting(true);
-    try {
+
+    startTransition(async () => {
       const res = await inviteTeamMemberAction({ name, email, role });
       if (res.success) {
         setOrg(prev => ({
@@ -73,7 +78,7 @@ export function TeamManager({ initialOrg }: TeamManagerProps) {
           members: [
             ...prev.members,
             {
-              id: `mem-${Date.now()}`,
+              id: crypto.randomUUID(),
               name,
               email,
               role,
@@ -85,28 +90,86 @@ export function TeamManager({ initialOrg }: TeamManagerProps) {
         setIsModalOpen(false);
         setName('');
         setEmail('');
+        showToast(`Invitación enviada a ${email} correctamente.`);
       } else {
-        alert(res.error || 'Error invitando al miembro.');
+        showToast(res.error || 'Error al invitar al miembro.', 'error');
       }
-    } catch (err) {
-      console.error(err);
-      alert('Error inesperado.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
 
-  const handleRemove = async (id: string) => {
-    if (!confirm('¿Seguro que deseas dar de baja a este colaborador de la entidad?')) return;
-    await removeTeamMemberAction(id);
-    setOrg(prev => ({
-      ...prev,
-      members: prev.members.filter(m => m.id !== id)
-    }));
+  const handleRemoveConfirm = () => {
+    if (!removeConfirmId) return;
+    startTransition(async () => {
+      await removeTeamMemberAction(removeConfirmId);
+      setOrg(prev => ({
+        ...prev,
+        members: prev.members.filter(m => m.id !== removeConfirmId)
+      }));
+      setRemoveConfirmId(null);
+      showToast('Colaborador dado de baja correctamente.');
+    });
   };
 
   return (
     <div className={styles.page}>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '24px', right: '24px',
+          background: toast.type === 'error' ? '#991B1B' : '#0D3A5F',
+          color: 'white',
+          padding: '0.85rem 1.5rem', borderRadius: '10px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          zIndex: 9999, fontSize: '0.875rem', fontWeight: 700,
+          border: `1.5px solid ${toast.type === 'error' ? '#FCA5A5' : '#16C7B2'}`,
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación */}
+      {removeConfirmId && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '2rem',
+            maxWidth: '420px', width: '90%', boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ background: '#FEE2E2', borderRadius: '10px', padding: '0.6rem', display: 'flex' }}>
+                <AlertTriangle size={20} color="#DC2626" />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
+                ¿Dar de baja a este colaborador?
+              </h3>
+            </div>
+            <p style={{ color: '#64748B', fontSize: '0.875rem', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              El colaborador perderá acceso a los proyectos de la entidad. Esta acción no se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setRemoveConfirmId(null)}
+                disabled={isPending}
+                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', background: 'white', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveConfirm}
+                disabled={isPending}
+                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', background: '#DC2626', color: 'white', cursor: isPending ? 'wait' : 'pointer', fontWeight: 700, fontSize: '0.875rem' }}
+              >
+                {isPending ? 'Procesando...' : 'Sí, dar de baja'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className={styles.header}>
         <div>
           <h1 className={styles.title}>Equipo y Colaboradores de la Entidad</h1>
@@ -151,6 +214,13 @@ export function TeamManager({ initialOrg }: TeamManagerProps) {
             </tr>
           </thead>
           <tbody>
+            {org.members.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', fontSize: '0.875rem' }}>
+                  No hay colaboradores registrados. Invita al primer miembro del equipo.
+                </td>
+              </tr>
+            )}
             {org.members.map(member => {
               const roleData = ROLE_INFO[member.role] || ROLE_INFO.tecnico;
               const Icon = roleData.icon;
@@ -177,9 +247,9 @@ export function TeamManager({ initialOrg }: TeamManagerProps) {
                   <td>
                     <button
                       type="button"
-                      onClick={() => handleRemove(member.id)}
+                      onClick={() => setRemoveConfirmId(member.id)}
                       className={styles.deleteBtn}
-                      title="Eliminar colaborador"
+                      title="Dar de baja a este colaborador"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -255,10 +325,10 @@ export function TeamManager({ initialOrg }: TeamManagerProps) {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isPending}
                   className={styles.inviteBtn}
                 >
-                  {isSubmitting ? 'Enviando Invitación...' : 'Enviar Invitación de Acceso'}
+                  {isPending ? 'Enviando...' : 'Enviar Invitación de Acceso'}
                 </button>
               </div>
             </form>

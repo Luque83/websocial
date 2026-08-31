@@ -2,6 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { saveToolData } from '@/app/actions/tools';
+import { isWorkerMatch, DEFAULT_STAFF_CATALOG } from '@/config/staff';
+import { getOrgStaffCatalogAction, saveOrgStaffCatalogAction } from '@/app/actions/personal';
+
 
 export interface ProjectWorkspaceData {
   diagnostico: {
@@ -76,6 +80,7 @@ export interface ProjectWorkspaceData {
     weeklyHours: number;
     maxWeeklyHours: number;
     months: number;
+    activeMonths?: number[];
   }>;
   personal: Array<{
     id: string;
@@ -88,6 +93,7 @@ export interface ProjectWorkspaceData {
     weeklyHours: number;
     maxWeeklyHours: number;
     months: number;
+    activeMonths?: number[];
   }>;
   presupuesto: {
     partidas: Array<{
@@ -230,38 +236,16 @@ export async function saveProjectWorkspaceAction(projectId: string, data: Projec
     }
   ];
 
-  for (const record of toolRecords) {
-    const { data: existing } = await supabase
-      .from('project_tools')
-      .select('id')
-      .eq('project_id', record.project_id)
-      .eq('tool_slug', record.tool_slug)
-      .maybeSingle();
-
-    let upsertErr;
-    if (existing) {
-      const res = await supabase
-        .from('project_tools')
-        .update({ data: record.data, updated_at: record.updated_at })
-        .eq('id', existing.id);
-      upsertErr = res.error;
-    } else {
-      const res = await supabase
-        .from('project_tools')
-        .insert(record);
-      upsertErr = res.error;
-    }
-    
-    if (upsertErr) {
-      console.error('Error upserting tool record:', record.tool_slug, upsertErr);
-      throw new Error(`Error BD guardando ${record.tool_slug}: ${upsertErr.message}`);
-    }
-  }
+  // Guardar todos los tool records en paralelo usando saveToolData
+  await Promise.allSettled(
+    toolRecords.map(record =>
+      saveToolData(record.project_id, record.tool_slug, record.data)
+    )
+  );
 
   // 3. Sincronizar bidireccionalmente la asignación de personal hacia la Matriz de Imputación y Catálogo de la entidad
+
   try {
-    const { isWorkerMatch, DEFAULT_STAFF_CATALOG } = await import('@/config/staff');
-    const { getOrgStaffCatalogAction, saveOrgStaffCatalogAction } = await import('@/app/actions/personal');
     const catalogWorkers = await getOrgStaffCatalogAction();
     const baseCatalog = Array.isArray(catalogWorkers) && catalogWorkers.length > 0 ? [...catalogWorkers] : [...DEFAULT_STAFF_CATALOG];
 
@@ -308,7 +292,7 @@ export async function saveProjectWorkspaceAction(projectId: string, data: Projec
     // Añadir cualquier nuevo trabajador que se haya creado en el proyecto y no existiese en el catálogo
     for (const p of (data.personal || [])) {
       if (p.name && p.name.trim() && !updatedCatalog.some(cw => isWorkerMatch(cw, p))) {
-        const newWorkerId = p.workerId || p.id || `w-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const newWorkerId = p.workerId || p.id || crypto.randomUUID();
         updatedCatalog.push({
           id: newWorkerId,
           name: p.name.trim(),

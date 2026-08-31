@@ -11,7 +11,8 @@ export const ADMIN_EMAILS = [
 ];
 
 /**
- * Determina si un usuario tiene permisos de Administrador General (SuperAdmin)
+ * Determina si un usuario tiene permisos de Administrador General (SuperAdmin).
+ * Solo se otorga acceso a emails explícitamente autorizados.
  */
 export function isSuperAdmin(email?: string | null): boolean {
   if (!email) return false;
@@ -21,15 +22,10 @@ export function isSuperAdmin(email?: string | null): boolean {
   // 1. Coincidencia con lista de administradores autorizados
   if (ADMIN_EMAILS.includes(normalized)) return true;
 
-  // 2. Si el email contiene el dominio oficial del autor o variables de entorno
+  // 2. Lista adicional mediante variable de entorno ADMIN_EMAILS (separado por comas)
   if (process.env.ADMIN_EMAILS) {
     const envAdmins = process.env.ADMIN_EMAILS.split(',').map(e => e.trim().toLowerCase());
     if (envAdmins.includes(normalized)) return true;
-  }
-
-  // 3. Por defecto, si coincide con el usuario del proyecto actual en desarrollo
-  if (normalized.includes('jlluq') || normalized.includes('admin')) {
-    return true;
   }
 
   return false;

@@ -6,17 +6,17 @@ import {
   Target, 
   Calendar, 
   Wrench, 
-  FolderOpen, 
   FolderKanban, 
   Users, 
   Clock, 
-  AlertCircle, 
+  AlertTriangle, 
   ShieldCheck,
-  Building2,
+  CheckCircle2,
   ArrowRight
 } from 'lucide-react';
 import styles from './page.module.css';
 import { getProjectsWithStats, getDashboardStats } from '@/app/actions/projects';
+import { getGlobalDeadlinesAction } from '@/app/actions/grant-lifecycle';
 import { CreateProjectForm } from './CreateProjectForm';
 import { CreateAIProjectModal } from './CreateAIProjectModal';
 import { getDashboardTools } from '@/config/tools.registry';
@@ -26,12 +26,21 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const [projects, stats] = await Promise.all([
+  const [projects, stats, deadlines] = await Promise.all([
     getProjectsWithStats(),
-    getDashboardStats()
+    getDashboardStats(),
+    getGlobalDeadlinesAction(),
   ]);
 
-  const totalTools = getDashboardTools().length;
+  const urgentDeadlines = deadlines.filter(d => {
+    if (d.isCompleted) return false;
+    const diffDays = Math.ceil((new Date(d.deadlineDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 30;
+  });
+  const overdueDeadlines = deadlines.filter(d => {
+    if (d.isCompleted) return false;
+    return new Date(d.deadlineDate) < new Date();
+  });
 
   const greeting = user?.user_metadata?.full_name 
     ? `¡Hola, ${user.user_metadata.full_name.split(' ')[0]}!` 
@@ -96,31 +105,62 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* CALENDARIO PREVENTIVO DE VENCIMIENTOS */}
-      <div style={{
-        background: '#fffbeb',
-        border: '1px solid #fde68a',
-        borderRadius: '12px',
-        padding: '1rem 1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Clock size={20} color="#b45309" />
-          <div>
-            <strong style={{ fontSize: '0.9375rem', color: '#92400e' }}>Plazos Próximos de Justificación (Convocatorias 2026)</strong>
-            <div style={{ fontSize: '0.8125rem', color: '#78350f' }}>
-              Quedan expedientes activos con fecha límite de justificación en los próximos 90 días.
+      {/* CALENDARIO PREVENTIVO DE VENCIMIENTOS REAL */}
+      <Link href="/dashboard/plazos" style={{ textDecoration: 'none' }}>
+        <div style={{
+          background: overdueDeadlines.length > 0 ? '#FEF2F2' : urgentDeadlines.length > 0 ? '#FFFBEB' : '#F0FDF4',
+          border: `1px solid ${overdueDeadlines.length > 0 ? '#FECACA' : urgentDeadlines.length > 0 ? '#FDE68A' : '#BBF7D0'}`,
+          borderRadius: '12px',
+          padding: '1rem 1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          transition: 'transform 0.15s ease',
+          cursor: 'pointer'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {overdueDeadlines.length > 0 ? (
+              <AlertTriangle size={20} color="#DC2626" />
+            ) : urgentDeadlines.length > 0 ? (
+              <Clock size={20} color="#B45309" />
+            ) : (
+              <CheckCircle2 size={20} color="#16A34A" />
+            )}
+            <div>
+              <strong style={{ fontSize: '0.9375rem', color: overdueDeadlines.length > 0 ? '#991B1B' : urgentDeadlines.length > 0 ? '#92400E' : '#166534' }}>
+                {overdueDeadlines.length > 0
+                  ? `⚠️ Atención: ${overdueDeadlines.length} ${overdueDeadlines.length === 1 ? 'plazo vencido' : 'plazos vencidos'}`
+                  : urgentDeadlines.length > 0
+                  ? `Plazos Próximos de Justificación (${urgentDeadlines.length} en los próximos 30 días)`
+                  : 'Todos los plazos y justificaciones de la entidad están al día'}
+              </strong>
+              <div style={{ fontSize: '0.8125rem', color: overdueDeadlines.length > 0 ? '#7F1D1D' : urgentDeadlines.length > 0 ? '#78350F' : '#15803D' }}>
+                {overdueDeadlines.length > 0 
+                  ? 'Hay requerimientos o entregas fuera de plazo que requieren subsanación urgente.'
+                  : urgentDeadlines.length > 0 
+                  ? 'Revisa los expedientes con vencimientos inminentes para evitar requerimientos.'
+                  : 'Supervisión de convocatorias, subsanaciones e informes intermedios activa.'}
+              </div>
             </div>
           </div>
+          <span style={{
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            background: overdueDeadlines.length > 0 ? '#FEE2E2' : urgentDeadlines.length > 0 ? '#FEF3C7' : '#DCFCE7',
+            color: overdueDeadlines.length > 0 ? '#991B1B' : urgentDeadlines.length > 0 ? '#92400E' : '#166534',
+            padding: '0.35rem 0.75rem',
+            borderRadius: '9999px',
+            border: `1px solid ${overdueDeadlines.length > 0 ? '#FECACA' : urgentDeadlines.length > 0 ? '#FDE68A' : '#86EFAC'}`,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem'
+          }}>
+            Ver Calendario <ArrowRight size={12} />
+          </span>
         </div>
-        <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#fef3c7', color: '#92400e', padding: '0.35rem 0.75rem', borderRadius: '9999px', border: '1px solid #fde68a' }}>
-          Supervisión Activa
-        </span>
-      </div>
+      </Link>
 
       <section className={styles.statsGrid}>
         <Card className={styles.statCard} padding="lg">
@@ -216,15 +256,7 @@ export default async function DashboardPage() {
           
           <div className={styles.formContainer}>
             <Card padding="lg">
-              <h3 className={styles.formTitle} style={{ marginBottom: '1rem' }}>Formular Expediente</h3>
-              <CreateAIProjectModal />
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0', color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
-                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
-                <span>o crear en blanco</span>
-                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
-              </div>
-
+              <h3 className={styles.formTitle} style={{ marginBottom: '1rem' }}>Crear Expediente en Blanco</h3>
               <CreateProjectForm />
             </Card>
           </div>

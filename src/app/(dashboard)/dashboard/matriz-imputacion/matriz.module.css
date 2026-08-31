@@ -1033,3 +1033,206 @@
   gap: 0.75rem;
 }
 
+/* ═════════════════════════════════════════════════════════════════════════
+   12-MONTH CALENDAR MATRIX GRID (VISTA MENSUAL ENE-DIC & SUSTITUCIONES)
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.monthlyGridCard {
+  background: white;
+  border: 1.5px solid #D5ECF8;
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(13, 58, 95, 0.05);
+}
+
+.monthlyTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.monthlyTable th {
+  background: #F8FAFC;
+  color: #0D3A5F;
+  font-weight: 800;
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  border-bottom: 2px solid #CBD5E1;
+  border-right: 1px solid #E2E8F0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.monthlyTable td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #E2E8F0;
+  border-right: 1px solid #E2E8F0;
+  vertical-align: top;
+  background: white;
+}
+
+.monthlyTable tr:hover td {
+  background: #FAFCFF;
+}
+
+.stickyWorkerCol {
+  position: sticky;
+  left: 0;
+  background: white !important;
+  z-index: 10;
+  box-shadow: 3px 0 8px rgba(0, 0, 0, 0.04);
+  border-right: 2px solid #CBD5E1 !important;
+  text-align: left !important;
+  min-width: 220px;
+}
+
+.monthCell {
+  min-width: 130px;
+  max-width: 160px;
+  height: 100%;
+}
+
+.monthCellContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 80px;
+  justify-content: space-between;
+}
+
+.monthPillsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.monthProjectPill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  padding: 0.25rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.71875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.monthProjectPill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.monthPillLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monthPillPct {
+  font-weight: 800;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.monthPillName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 75px;
+}
+
+.monthPillToggle {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.6;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  color: inherit;
+}
+
+.monthPillToggle:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.monthTotalPill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  margin-top: auto;
+}
+
+.monthTotalPillOk {
+  background: #DCFCE7;
+  color: #166534;
+  border: 1px solid #86EFAC;
+}
+
+.monthTotalPillAlert {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
+  animation: pulseAlert 2s infinite ease-in-out;
+}
+
+.monthTotalPillEmpty {
+  background: #F1F5F9;
+  color: #94A3B8;
+  border: 1px dashed #CBD5E1;
+  justify-content: center;
+}
+
+@keyframes pulseAlert {
+  0%, 100% { background: #FEE2E2; }
+  50% { background: #FECACA; }
+}
+
+.monthCellAddBtn {
+  background: #F8FAFC;
+  border: 1px dashed #CBD5E1;
+  color: #64748B;
+  border-radius: 4px;
+  padding: 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  width: 100%;
+  transition: all 0.15s;
+}
+
+.monthCellAddBtn:hover {
+  background: #EFF6FF;
+  border-color: #3B82F6;
+  color: #1D4ED8;
+}
+
+.monthFooterRow td {
+  background: #F8FAFC !important;
+  font-weight: 800;
+  color: #0D3A5F;
+  border-top: 2px solid #CBD5E1;
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+}
+
+

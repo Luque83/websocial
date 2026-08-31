@@ -17,8 +17,11 @@ import {
   Search,
   SlidersHorizontal,
   X,
-  CreditCard
+  CreditCard,
+  Printer
 } from 'lucide-react';
+import { uploadProjectDocumentAction } from '@/app/actions/storage';
+import { CertificadoGastoModal } from './CertificadoGastoModal';
 import styles from './execution.module.css';
 
 export interface FacturaItem {
@@ -48,6 +51,10 @@ export interface FacturasManagerProps {
   onChange: (facturas: FacturaItem[]) => void;
   partidasPresupuesto: Array<{ id: string; category: string; description: string }>;
   subvencionConcedida: number;
+  projectId?: string;
+  projectName?: string;
+  entityName?: string;
+  entityCif?: string;
 }
 
 export function FacturasManager({
@@ -55,11 +62,17 @@ export function FacturasManager({
   onChange,
   partidasPresupuesto,
   subvencionConcedida,
+  projectId = 'proj-general',
+  projectName = 'Proyecto Subvencionado',
+  entityName = 'Asociación para el Desarrollo e Intervención Social',
+  entityCif = 'G-82910482',
 }: FacturasManagerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending'>('all');
   const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [selectedFacturaForCert, setSelectedFacturaForCert] = useState<FacturaItem | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   // Form state for OCR / Smart add modal
   const [ocrForm, setOcrForm] = useState<Partial<FacturaItem>>({
@@ -104,10 +117,11 @@ export function FacturasManager({
       id: `fac-${Date.now()}`,
       proveedor: '',
       nif: '',
-      numFactura: '',
+      numFactura: `FAC-${Date.now().toString().slice(-4)}`,
       fecha: new Date().toISOString().slice(0, 10),
       concepto: '',
       partidaId: partidasPresupuesto[0]?.id || '',
+      partidaName: partidasPresupuesto[0]?.description || '',
       totalFactura: 0,
       pctImputado: 100,
       importeImputado: 0,
@@ -121,6 +135,7 @@ export function FacturasManager({
     const total = ocrForm.totalFactura || 0;
     const pct = ocrForm.pctImputado || 100;
     const imp = Number((total * (pct / 100)).toFixed(2));
+    const matchedPartida = partidasPresupuesto.find(p => p.id === ocrForm.partidaId) || partidasPresupuesto[0];
 
     const newFac: FacturaItem = {
       id: `fac-${Date.now()}`,
@@ -129,7 +144,8 @@ export function FacturasManager({
       numFactura: ocrForm.numFactura || `FAC-${Date.now().toString().slice(-4)}`,
       fecha: ocrForm.fecha || new Date().toISOString().slice(0, 10),
       concepto: ocrForm.concepto || 'Gasto de proyecto',
-      partidaId: ocrForm.partidaId || partidasPresupuesto[0]?.id || '',
+      partidaId: matchedPartida?.id || '',
+      partidaName: matchedPartida?.description || '',
       totalFactura: total,
       pctImputado: pct,
       importeImputado: imp,
@@ -138,34 +154,44 @@ export function FacturasManager({
       metodoPago: ocrForm.metodoPago || 'transferencia_sepa',
       refBancaria: ocrForm.refBancaria,
       facturaFileName: ocrForm.facturaFileName,
+      facturaFileUrl: ocrForm.facturaFileUrl,
       justificanteFileName: ocrForm.justificanteFileName,
+      justificanteFileUrl: ocrForm.justificanteFileUrl,
     };
 
     onChange([...facturas, newFac]);
     setIsOcrModalOpen(false);
   };
 
-  const handleSimulateOcrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSimulateOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setOcrLoading(true);
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('projectId', projectId);
+      formData.append('category', 'facturas');
+      const uploadRes = await uploadProjectDocumentAction(formData);
+
       setOcrForm(prev => ({
         ...prev,
         facturaFileName: file.name,
+        facturaFileUrl: uploadRes.fileUrl,
         proveedor: file.name.includes('alquiler') ? 'Inmobiliaria Social Centro S.L.' : 'Suministros Pedagógicos del Sur S.A.',
-        nif: file.name.includes('alquiler') ? 'B-41829102' : 'A-91823741',
+        nif: file.name.includes('alquiler') ? 'B-84920193' : 'A-91823741',
         numFactura: `FAC-${Math.floor(1000 + Math.random() * 9000)}`,
         totalFactura: file.name.includes('alquiler') ? 950.00 : 420.50,
         pctImputado: 100,
-        concepto: file.name.includes('alquiler') ? 'Arrendamiento de sede y aulas de formación' : 'Material didáctico y licencias software',
+        concepto: file.name.includes('alquiler') ? 'Arrendamiento de sede y aulas de formación' : 'Material didáctico y kits de intervención social',
         justificantePago: true,
         justificanteFileName: `SEPA_Transf_${file.name.replace('.pdf', '')}.pdf`,
         refBancaria: `SEPA-REF-${Math.floor(100000 + Math.random() * 900000)}`
       }));
+    } finally {
       setOcrLoading(false);
-    }, 800);
+    }
   };
 
   const handleExportCSV = () => {
@@ -175,6 +201,7 @@ export function FacturasManager({
       'NIF/CIF',
       'Nº Factura',
       'Fecha Emisión',
+      'Partida Presupuestaria',
       'Concepto',
       'Total Factura (€)',
       '% Imputación',
@@ -190,6 +217,7 @@ export function FacturasManager({
       `"${f.nif}"`,
       `"${f.numFactura}"`,
       f.fecha,
+      `"${f.partidaName || f.partidaId || '—'}"`,
       `"${f.concepto}"`,
       f.totalFactura,
       `${f.pctImputado}%`,
@@ -203,7 +231,7 @@ export function FacturasManager({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Libro_Facturas_Subvencion_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Libro_Facturas_${projectName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -216,10 +244,10 @@ export function FacturasManager({
         <div>
           <h2 className={styles.sectionTitle}>
             <Receipt size={22} color="#16C7B2" />
-            <span>Gestor Inteligente de Facturas, Gastos y Justificantes Bancarios</span>
+            <span>Gestor de Facturas, Gastos Directos y Justificantes Bancarios</span>
           </h2>
           <p className={styles.sectionSubtitle}>
-            Registro formal de facturas con auto-extracción OCR, imputación presupuestaria y comprobantes bancarios SEPA conforme a la Ley General de Subvenciones.
+            Registro formal de facturas con auto-extracción OCR, imputación presupuestaria, comprobantes bancarios SEPA y certificados oficiales conforme a la Ley General de Subvenciones.
           </p>
         </div>
 
@@ -332,19 +360,20 @@ export function FacturasManager({
               <th style={{ minWidth: '80px', textAlign: 'right' }}>% Imp.</th>
               <th style={{ minWidth: '120px', textAlign: 'right' }}>Imputado Subv.</th>
               <th style={{ minWidth: '140px', textAlign: 'center' }}>Adjunto Factura</th>
-              <th style={{ minWidth: '160px', textAlign: 'center' }}>Trazabilidad Pago SEPA</th>
+              <th style={{ minWidth: '150px', textAlign: 'center' }}>Pago SEPA</th>
+              <th style={{ minWidth: '120px', textAlign: 'center' }}>Certificado</th>
               <th style={{ width: '40px' }}></th>
             </tr>
           </thead>
           <tbody>
             {filteredFacturas.length === 0 ? (
               <tr>
-                <td colSpan={10} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#94A3B8' }}>
+                <td colSpan={11} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#94A3B8' }}>
                   No hay facturas registradas que coincidan con la búsqueda.
                 </td>
               </tr>
             ) : (
-              filteredFacturas.map((fac, idx) => (
+              filteredFacturas.map((fac) => (
                 <tr key={fac.id}>
                   {/* Proveedor & NIF */}
                   <td>
@@ -490,7 +519,7 @@ export function FacturasManager({
                     </strong>
                   </td>
 
-                  {/* Adjunto Factura */}
+                  {/* Adjunto Factura con Subida Real a Supabase */}
                   <td style={{ textAlign: 'center' }}>
                     {fac.facturaFileName ? (
                       <span className={styles.fileBadge} title={fac.facturaFileName}>
@@ -503,13 +532,23 @@ export function FacturasManager({
                           type="file"
                           accept=".pdf,image/*"
                           style={{ display: 'none' }}
-                          onChange={e => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const updated = [...facturas];
-                              const fIndex = facturas.findIndex(f => f.id === fac.id);
-                              updated[fIndex].facturaFileName = file.name;
-                              onChange(updated);
+                              setUploadingId(fac.id);
+                              const formData = new FormData();
+                              formData.append('file', file);
+                              formData.append('projectId', projectId);
+                              formData.append('category', 'facturas');
+                              const res = await uploadProjectDocumentAction(formData);
+                              if (res.success && res.fileUrl) {
+                                const updated = [...facturas];
+                                const fIndex = facturas.findIndex(f => f.id === fac.id);
+                                updated[fIndex].facturaFileName = res.fileName;
+                                updated[fIndex].facturaFileUrl = res.fileUrl;
+                                onChange(updated);
+                              }
+                              setUploadingId(null);
                             }
                           }}
                         />
@@ -517,7 +556,7 @@ export function FacturasManager({
                     )}
                   </td>
 
-                  {/* Pago SEPA */}
+                  {/* Pago SEPA con Subida Real */}
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
@@ -551,20 +590,41 @@ export function FacturasManager({
                             type="file"
                             accept=".pdf,image/*"
                             style={{ display: 'none' }}
-                            onChange={e => {
+                            onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (file) {
-                                const updated = [...facturas];
-                                const fIndex = facturas.findIndex(f => f.id === fac.id);
-                                updated[fIndex].justificanteFileName = file.name;
-                                updated[fIndex].justificantePago = true;
-                                onChange(updated);
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                formData.append('projectId', projectId);
+                                formData.append('category', 'justificantes');
+                                const res = await uploadProjectDocumentAction(formData);
+                                if (res.success && res.fileUrl) {
+                                  const updated = [...facturas];
+                                  const fIndex = facturas.findIndex(f => f.id === fac.id);
+                                  updated[fIndex].justificanteFileName = res.fileName;
+                                  updated[fIndex].justificanteFileUrl = res.fileUrl;
+                                  updated[fIndex].justificantePago = true;
+                                  onChange(updated);
+                                }
                               }
                             }}
                           />
                         </label>
                       )}
                     </div>
+                  </td>
+
+                  {/* Certificado Imputación Imprimible */}
+                  <td style={{ textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFacturaForCert(fac)}
+                      className={styles.btnSecondary}
+                      style={{ fontSize: '0.71875rem', padding: '0.3rem 0.55rem' }}
+                      title="Generar Certificado Oficial de Imputación de Gasto"
+                    >
+                      <Printer size={13} /> Certificado
+                    </button>
                   </td>
 
                   {/* Delete */}
@@ -623,7 +683,7 @@ export function FacturasManager({
                   {ocrLoading ? '⏳ Procesando y extrayendo campos con IA...' : 'Selecciona o arrastra una factura en PDF o Imagen'}
                 </strong>
                 <span style={{ fontSize: '0.75rem', color: '#6366F1' }}>
-                  Extracción automática de Proveedor, CIF, Fecha, Base Imponible, IVA y Concepto
+                  Extracción automática de Proveedor, CIF, Fecha, Base Imponible, IVA y Concepto con custodia digital
                 </span>
                 <input
                   type="file"
@@ -670,6 +730,20 @@ export function FacturasManager({
                     value={ocrForm.fecha || ''}
                     onChange={e => setOcrForm({ ...ocrForm, fecha: e.target.value })}
                   />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className={styles.dataLabel}>Partida Presupuestaria de Imputación</label>
+                  <select
+                    className={styles.inputField}
+                    value={ocrForm.partidaId || ''}
+                    onChange={e => setOcrForm({ ...ocrForm, partidaId: e.target.value })}
+                  >
+                    {partidasPresupuesto.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.category.toUpperCase()}: {p.description}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className={styles.dataLabel}>Concepto del Gasto</label>
@@ -725,6 +799,22 @@ export function FacturasManager({
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL CERTIFICADO DE IMPUTACIÓN DE GASTO */}
+      {selectedFacturaForCert && (
+        <CertificadoGastoModal
+          isOpen={true}
+          onClose={() => setSelectedFacturaForCert(null)}
+          factura={selectedFacturaForCert}
+          project={{
+            name: projectName,
+            entityName: entityName,
+            entityCif: entityCif,
+            expediente: 'SUBV-2026/048',
+            organismo: 'Administración Concedente Oficial'
+          }}
+        />
       )}
     </div>
   );
